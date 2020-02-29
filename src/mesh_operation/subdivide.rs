@@ -8,5 +8,7 @@ pub struct Subdivide {
 }
 
 impl Operation for Subdivide {
-  fn apply<D : DataStructure>(&self, mesh: &mut D) {}
+  fn apply<D : DataStructure>(&self, mesh: &mut D) {
+    mesh.flip_edge(&mesh.initial_edge())
+  }
 }

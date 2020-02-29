@@ -17,8 +17,6 @@ pub trait DataStructure: Sized {
     IterVert: IntoIterator<Item = Vertex>,
     IterFace: IntoIterator<Item = Face>;
 
-  fn to_vecs(&mut self) -> (Vec<Vertex>, Vec<Face>);
-
   fn from_obj(path: &Path) -> Result<Self, tobj::LoadError> {
     let (models, _) = tobj::load_obj(path)?;
     let vertices = models
@@ -47,6 +45,34 @@ pub trait DataStructure: Sized {
 
     Ok(Self::from_iters(vertices, faces))
   }
+
+  type EdgeKey : Sized;
+  type VertexKey : Sized;
+
+  // TODO: gross... why can't iterators be used...
+  fn initial_edge(&self) -> Self::EdgeKey;
+
+  fn next_edge(&self, key : &Self::EdgeKey) -> Self::EdgeKey;
+
+  fn flip_edge(&mut self, key: &Self::EdgeKey);
+
+  // fn split_edge(&mut self, key: &Self::EdgeKey) -> Self::VertexKey;
+
+  // fn collapse_edge(&mut self, key: &Self::EdgeKey) -> Self::VertexKey;
+
+  // fn set_position(&mut self, key: &Self::VertexKey, position: &Vertex);
+
+  // fn get_position(&self, key: &Self::VertexKey) -> Vertex;
+
+  // fn get_neighbors(
+  //   &self,
+  //   key: &Self::VertexKey,
+  //   neighbors: &mut Vec<Self::VertexKey>,
+  // );
+
+  // fn get_endpoints(&self, key : &Self::EdgeKey) -> [Self::VertexKey; 2];
+
+  fn to_vecs(&mut self) -> (Vec<Vertex>, Vec<Face>);
 
   fn save_obj(&mut self, path: &Path) -> std::io::Result<()> {
     let mut writer = BufWriter::new(File::create(path)?);
