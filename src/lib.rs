@@ -1,7 +1,8 @@
-pub mod mesh;
+pub mod data_structure;
 pub mod mesh_operation;
 
-pub use mesh::Mesh;
+pub use data_structure::DataStructure;
+pub use data_structure::HalfEdge;
 
 pub use mesh_operation::Operation;
 

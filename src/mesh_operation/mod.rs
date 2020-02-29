@@ -1,7 +1,7 @@
-use crate::mesh::Mesh;
+use crate::DataStructure;
 
 pub trait Operation {
-  fn apply(&self, mesh: &Mesh) -> Mesh;
+  fn apply<D : DataStructure>(&self, mesh: &mut D);
 }
 
 mod denoise;

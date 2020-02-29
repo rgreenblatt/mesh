@@ -1,4 +1,4 @@
-use crate::mesh::Mesh;
+use crate::DataStructure;
 use crate::mesh_operation::Operation;
 use clap::Clap;
 
@@ -11,10 +11,5 @@ pub struct Denoise {
 }
 
 impl Operation for Denoise {
-  fn apply(&self, mesh: &Mesh) -> Mesh {
-    Mesh {
-      vertices: Vec::new(),
-      faces: Vec::new(),
-    }
-  }
+  fn apply<D : DataStructure>(&self, mesh: &mut D) {}
 }

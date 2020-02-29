@@ -1,4 +1,4 @@
-use crate::mesh::Mesh;
+use crate::DataStructure;
 use crate::mesh_operation::Operation;
 use clap::Clap;
 
@@ -8,10 +8,5 @@ pub struct Subdivide {
 }
 
 impl Operation for Subdivide {
-  fn apply(&self, mesh: &Mesh) -> Mesh {
-    Mesh {
-      vertices: Vec::new(),
-      faces: Vec::new(),
-    }
-  }
+  fn apply<D : DataStructure>(&self, mesh: &mut D) {}
 }
