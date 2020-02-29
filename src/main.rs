@@ -1,6 +1,12 @@
 use clap::Clap;
 use std::path::Path;
-use tobj;
+
+use mesh::Denoise;
+use mesh::Mesh;
+use mesh::Operation;
+use mesh::Remesh;
+use mesh::Simplify;
+use mesh::Subdivide;
 
 #[derive(Clap)]
 #[clap(version = "0.1", author = "Ryan G.")]
@@ -19,39 +25,27 @@ struct Opts {
 enum Methods {
   #[clap(name = "subdivide")]
   /// subdivide the mesh using loop subdivision
-  Subdivide(SubdivideOpts),
+  Subdivide(Subdivide),
   #[clap(name = "simplify")]
-  Simplify(SimplifyOpts),
+  Simplify(Simplify),
   #[clap(name = "remesh")]
-  Remesh(RemeshOpts),
+  Remesh(Remesh),
   #[clap(name = "denoise")]
-  Denoise(DenoiseOpts),
+  Denoise(Denoise),
 }
 
-#[derive(Clap)]
-struct SubdivideOpts {
-  iterations: u32,
-}
-
-#[derive(Clap)]
-struct SimplifyOpts {
-  faces_to_remove: u32,
-}
-
-#[derive(Clap)]
-struct RemeshOpts {
-  smoothing_weight: f32,
-}
-
-#[derive(Clap)]
-struct DenoiseOpts {
-  sigma_c: f32,
-  sigma_s: f32,
-  kernel_size: u32,
-}
-
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
   let opts: Opts = Opts::parse();
+  let mesh = Mesh::new(&Path::new(&opts.infile))?;
 
-  let mesh = tobj::load_obj(&Path::new(&opts.infile));
+  let out_mesh = match opts.method {
+    Methods::Subdivide(v) => v.apply(&mesh),
+    Methods::Simplify(v) => v.apply(&mesh),
+    Methods::Remesh(v) => v.apply(&mesh),
+    Methods::Denoise(v) => v.apply(&mesh),
+  };
+
+  out_mesh.save(&Path::new(&opts.outfile))?;
+
+  Ok(())
 }
