@@ -2,9 +2,7 @@ use crate::data_structure::base::Face;
 use crate::data_structure::base::Vertex;
 use crate::data_structure::DataStructure;
 
-use std::collections::BTreeSet;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 
 type IndexType = u32;
 
@@ -64,35 +62,32 @@ impl HalfEdge {
     }
   }
 
-  #[cfg(debug_assertions)]
   fn verify_half_edge_valid(&self, half_edge_idx: IndexType) {
-    let half_edge = &self.half_edge_refs[half_edge_idx as usize];
-    debug_assert_eq!(
-      self.relative_get(half_edge_idx, Offset::Next).vertex_idx,
-      self.half_edge_refs[half_edge.twin_idx.unwrap() as usize].vertex_idx
-    );
+    if cfg!(debug_assertions) {
+      let half_edge = &self.half_edge_refs[half_edge_idx as usize];
+      debug_assert_eq!(
+        self.relative_get(half_edge_idx, Offset::Next).vertex_idx,
+        self.half_edge_refs[half_edge.twin_idx.unwrap() as usize].vertex_idx
+      );
 
-    debug_assert_eq!(
-      self.relative_get(half_edge_idx, Offset::NextNext).next_idx,
-      half_edge_idx
-    );
-  }
-
-  #[cfg(not(debug_assertions))]
-  fn verify_half_edge_valid(&self, _: IndexType) {}
-
-  #[cfg(debug_assertions)]
-  fn verify_vertex_valid(&self, vertex: IndexType) {
-    let mut neighbors = Vec::new();
-    self.get_vertex_neighbors(&vertex, &mut neighbors);
-    debug_assert!(!neighbors.contains(&vertex));
-    for idx in neighbors {
-      self.verify_half_edge_valid(self.vertex_refs[idx as usize].half_edge_idx)
+      debug_assert_eq!(
+        self.relative_get(half_edge_idx, Offset::NextNext).next_idx,
+        half_edge_idx
+      );
     }
   }
 
-  #[cfg(not(debug_assertions))]
-  fn verify_vertex_valid(&self, _: IndexType) {}
+  fn verify_vertex_valid(&self, vertex: IndexType) {
+    if cfg!(debug_assertions) {
+      let mut neighbors = Vec::new();
+      self.get_vertex_neighbors(&vertex, &mut neighbors);
+      debug_assert!(!neighbors.contains(&vertex));
+      for idx in neighbors {
+        self
+          .verify_half_edge_valid(self.vertex_refs[idx as usize].half_edge_idx)
+      }
+    }
+  }
 
   fn get_face_neighbors(&self, face: &IndexType) -> [IndexType; 3] {
     let half_edge = &self.half_edge_refs
@@ -270,17 +265,6 @@ impl DataStructure for HalfEdge {
       let d_vertex_idx =
         self.relative_get(c_b_idx, Offset::NextNext).vertex_idx;
 
-      assert_eq!(
-        a_vertex_idx,
-        self.half_edge_refs[a_b_idx as usize].vertex_idx
-      );
-      assert_eq!(
-        a_vertex_idx,
-        self.half_edge_refs
-          [self.half_edge_refs[c_a_idx as usize].twin_idx.unwrap() as usize]
-          .vertex_idx
-      );
-
       let c_a_d_face = c_b_half_edge.face_idx;
       let b_a_d_face = b_c_half_edge.face_idx;
 
@@ -368,35 +352,6 @@ impl DataStructure for HalfEdge {
       let b_vertex_idx = self.relative_get(b_d_idx, Offset::Current).vertex_idx;
       let c_vertex_idx = self.relative_get(c_b_idx, Offset::Current).vertex_idx;
       let d_vertex_idx = self.relative_get(d_c_idx, Offset::Current).vertex_idx;
-
-      assert_eq!(
-        self.half_edge_refs[c_b_idx as usize].edge_idx,
-        self.half_edge_refs[b_c_idx as usize].edge_idx,
-      );
-      assert_eq!(
-        self.half_edge_refs[c_a_idx as usize].vertex_idx,
-        c_vertex_idx
-      );
-      assert_eq!(
-        self.half_edge_refs[c_b_idx as usize].vertex_idx,
-        c_vertex_idx
-      );
-      assert_eq!(
-        self.half_edge_refs[a_b_idx as usize].vertex_idx,
-        a_vertex_idx
-      );
-      assert_eq!(
-        self.half_edge_refs[b_c_idx as usize].vertex_idx,
-        b_vertex_idx
-      );
-      assert_eq!(
-        self.half_edge_refs[b_d_idx as usize].vertex_idx,
-        b_vertex_idx
-      );
-      assert_eq!(
-        self.half_edge_refs[d_c_idx as usize].vertex_idx,
-        d_vertex_idx
-      );
 
       self.verify_half_edge_valid(c_a_idx);
       self.verify_half_edge_valid(a_b_idx);
@@ -539,42 +494,6 @@ impl DataStructure for HalfEdge {
         edge_idx: m_a_edge_idx,
         face_idx: m_c_a_face_idx,
       });
-
-      let m_c_a_idx = self.face_refs[m_c_a_face_idx as usize].half_edge_idx;
-
-      assert!(
-        m_c_a_idx == m_c_idx || m_c_a_idx == c_a_idx || m_c_a_idx == a_m_idx
-      );
-
-      assert_eq!(
-        BTreeSet::from_iter([a_vertex_idx, c_vertex_idx, m_vertex_idx].iter()),
-        BTreeSet::from_iter(self.get_face_neighbors(&m_c_a_face_idx).iter())
-      );
-
-      assert_eq!(
-        BTreeSet::from_iter([d_vertex_idx, c_vertex_idx, m_vertex_idx].iter()),
-        BTreeSet::from_iter(self.get_face_neighbors(&m_d_c_face_idx).iter())
-      );
-
-      assert_eq!(
-        BTreeSet::from_iter([d_vertex_idx, b_vertex_idx, m_vertex_idx].iter()),
-        BTreeSet::from_iter(self.get_face_neighbors(&m_b_d_face_idx).iter())
-      );
-
-      assert_eq!(
-        BTreeSet::from_iter([a_vertex_idx, b_vertex_idx, m_vertex_idx].iter()),
-        BTreeSet::from_iter(self.get_face_neighbors(&m_a_b_face_idx).iter())
-      );
-
-      let mut neighbors_debug = Vec::new();
-      self.get_vertex_neighbors(&m_vertex_idx, &mut neighbors_debug);
-
-      assert_eq!(
-        BTreeSet::from_iter(
-          [a_vertex_idx, b_vertex_idx, c_vertex_idx, d_vertex_idx].iter()
-        ),
-        BTreeSet::from_iter(neighbors_debug.iter())
-      );
 
       self.verify_half_edge_valid(c_a_idx);
       self.verify_half_edge_valid(a_b_idx);
