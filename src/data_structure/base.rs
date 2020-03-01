@@ -46,31 +46,62 @@ pub trait DataStructure: Sized {
     Ok(Self::from_iters(vertices, faces))
   }
 
-  type EdgeKey : Sized;
-  type VertexKey : Sized;
+  fn num_vertices(&self) -> usize;
 
-  // TODO: gross... why can't iterators be used...
-  fn initial_edge(&self) -> Self::EdgeKey;
+  fn num_edges(&self) -> usize;
 
-  fn next_edge(&self, key : &Self::EdgeKey) -> Self::EdgeKey;
+  fn num_faces(&self) -> usize;
+
+  type VertexKey: Sized + std::fmt::Debug + Eq;
+  type EdgeKey: Sized + std::fmt::Debug + Eq;
+  // type FaceKey: Sized + std::fmt::Debug + Eq;
+  type IterVertexKeys: Iterator<Item = Self::VertexKey>;
+  type IterEdgeKeys: Iterator<Item = Self::EdgeKey>;
+  // type IterFaceKeys: Iterator<Item = Self::FaceKey>;
+
+  fn vertex_keys(&self) -> Self::IterVertexKeys;
+
+  fn edge_keys(&self) -> Self::IterEdgeKeys;
+
+  // fn face_keys(&self) -> Self::IterFaceKeys;
 
   fn flip_edge(&mut self, key: &Self::EdgeKey);
 
-  // fn split_edge(&mut self, key: &Self::EdgeKey) -> Self::VertexKey;
+  // order of returned edges:
+  // original edge left, original edge right
+  // new edge top, new edge bottom (same order as get_opposite_points)
+  fn split_edge(
+    &mut self,
+    key: &Self::EdgeKey,
+  ) -> (Self::VertexKey, [Self::EdgeKey; 4]);
 
   // fn collapse_edge(&mut self, key: &Self::EdgeKey) -> Self::VertexKey;
 
-  // fn set_position(&mut self, key: &Self::VertexKey, position: &Vertex);
+  fn set_position(&mut self, key: &Self::VertexKey, position: &Vertex);
 
-  // fn get_position(&self, key: &Self::VertexKey) -> Vertex;
+  fn get_position(&self, key: &Self::VertexKey) -> Vertex;
 
-  // fn get_neighbors(
+  fn get_vertex_neighbors(
+    &self,
+    key: &Self::VertexKey,
+    neighbors: &mut Vec<Self::VertexKey>,
+  );
+
+  // endpoint, endpoint, and far points of adjacent faces
+  fn get_edge_neighbors(
+    &self,
+    key: &Self::EdgeKey,
+  ) -> ([Self::VertexKey; 3], Option<Self::VertexKey>);
+
+  // fn get_face_neighbors(
   //   &self,
-  //   key: &Self::VertexKey,
+  //   key: &Self::FaceKey,
   //   neighbors: &mut Vec<Self::VertexKey>,
   // );
 
-  // fn get_endpoints(&self, key : &Self::EdgeKey) -> [Self::VertexKey; 2];
+  fn get_endpoints(&self, key: &Self::EdgeKey) -> [Self::VertexKey; 2];
+
+  // fn get_face_edges(&self, key: &Self::FaceKey) -> [Self::FaceKey; 3];
 
   fn to_vecs(&mut self) -> (Vec<Vertex>, Vec<Face>);
 

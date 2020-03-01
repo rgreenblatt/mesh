@@ -3,6 +3,7 @@ pub mod mesh_operation;
 
 pub use data_structure::DataStructure;
 pub use data_structure::HalfEdge;
+pub use data_structure::Vertex;
 
 pub use mesh_operation::Operation;
 
