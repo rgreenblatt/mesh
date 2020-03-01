@@ -1,5 +1,5 @@
-use crate::DataStructure;
 use crate::mesh_operation::Operation;
+use crate::DataStructure;
 use clap::Clap;
 
 #[derive(Clap)]
@@ -11,5 +11,5 @@ pub struct Denoise {
 }
 
 impl Operation for Denoise {
-  fn apply<D : DataStructure>(&self, mesh: &mut D) {}
+  fn apply<D: DataStructure>(&self, mesh: &mut D) {}
 }

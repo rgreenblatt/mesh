@@ -62,7 +62,6 @@ impl Operation for Subdivide {
 
       let faces_before = mesh.num_faces();
 
-
       // collect so we don't iterate over new edges... (there are
       // more efficient approaches...)
       for (edge_key, vertex_pos, [far_l, far_r]) in new_vertex_info {

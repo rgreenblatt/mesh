@@ -1,5 +1,5 @@
-use crate::DataStructure;
 use crate::mesh_operation::Operation;
+use crate::DataStructure;
 use clap::Clap;
 
 #[derive(Clap)]
@@ -8,5 +8,5 @@ pub struct Simplify {
 }
 
 impl Operation for Simplify {
-  fn apply<D : DataStructure>(&self, mesh: &mut D) {}
+  fn apply<D: DataStructure>(&self, mesh: &mut D) {}
 }
