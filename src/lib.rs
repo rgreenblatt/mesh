@@ -1,3 +1,5 @@
+#![feature(type_alias_impl_trait)]
+
 pub mod data_structure;
 pub mod mesh_operation;
 

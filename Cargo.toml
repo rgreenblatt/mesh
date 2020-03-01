@@ -10,3 +10,4 @@ edition = "2018"
 clap = { git = "https://github.com/clap-rs/clap" }
 tobj = "0.1"
 nalgebra = "0.19"
+ordered-float = "1.0"

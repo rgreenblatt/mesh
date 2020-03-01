@@ -3,6 +3,7 @@ use crate::data_structure::base::Vertex;
 use crate::data_structure::DataStructure;
 
 use std::collections::HashMap;
+use std::convert::TryInto;
 
 type IndexType = u32;
 
@@ -31,9 +32,12 @@ struct FaceRef {
 
 pub struct HalfEdge {
   half_edge_refs: Vec<HalfEdgeRef>,
-  vertex_refs: Vec<VertexRef>,
-  edge_refs: Vec<EdgeRef>,
-  face_refs: Vec<FaceRef>,
+  vertex_refs: Vec<Option<VertexRef>>,
+  edge_refs: Vec<Option<EdgeRef>>,
+  face_refs: Vec<Option<FaceRef>>,
+  num_removed_vertices: usize,
+  num_removed_edges: usize,
+  num_removed_faces: usize,
 }
 
 enum Offset {
@@ -80,25 +84,45 @@ impl HalfEdge {
   fn verify_vertex_valid(&self, vertex: IndexType) {
     if cfg!(debug_assertions) {
       let mut neighbors = Vec::new();
-      self.get_vertex_neighbors(&vertex, &mut neighbors);
+      self.get_vertex_neighbors(vertex, &mut neighbors);
       debug_assert!(!neighbors.contains(&vertex));
+      self.verify_half_edge_valid(
+        self.vertex_refs[vertex as usize]
+          .as_ref()
+          .unwrap()
+          .half_edge_idx,
+      );
       for idx in neighbors {
-        self
-          .verify_half_edge_valid(self.vertex_refs[idx as usize].half_edge_idx)
+        self.verify_half_edge_valid(
+          self.vertex_refs[idx as usize]
+            .as_ref()
+            .unwrap()
+            .half_edge_idx,
+        )
       }
     }
   }
 
-  fn get_face_neighbors(&self, face: &IndexType) -> [IndexType; 3] {
+  fn get_face_neighbors(&self, face: &IndexType) -> Option<[IndexType; 3]> {
     let half_edge = &self.half_edge_refs
-      [self.face_refs[*face as usize].half_edge_idx as usize];
+      [self.face_refs[*face as usize].as_ref()?.half_edge_idx as usize];
     let next_half_edge = self.get_next(half_edge);
     let next_next_half_edge = self.get_next(next_half_edge);
-    [
+    Some([
       half_edge.vertex_idx as IndexType,
       next_half_edge.vertex_idx as IndexType,
       next_next_half_edge.vertex_idx as IndexType,
-    ]
+    ])
+  }
+
+  fn get_at<T>(start: IndexType, vals: &Vec<Option<T>>) -> Option<IndexType> {
+    for check in start..(vals.len() as IndexType) {
+      if vals[check as usize].is_some() {
+        return Some(check);
+      }
+    }
+
+    None
   }
 }
 
@@ -135,10 +159,10 @@ impl DataStructure for HalfEdge {
               let vertex_idx = vertex_refs.len() as IndexType;
               vertex_orig_idx_to_vertex_new_idx
                 .insert(*vertex_orig_idx, vertex_idx);
-              vertex_refs.push(VertexRef {
+              vertex_refs.push(Some(VertexRef {
                 half_edge_idx,
                 vertex: vertices_vec[*vertex_orig_idx as usize],
-              });
+              }));
               vertex_idx
             }
           };
@@ -162,7 +186,7 @@ impl DataStructure for HalfEdge {
         let edge_idx = match twin_idx {
           Some(v) => half_edge_refs[v as usize].edge_idx,
           None => {
-            edge_refs.push(EdgeRef { half_edge_idx });
+            edge_refs.push(Some(EdgeRef { half_edge_idx }));
             (edge_refs.len() - 1) as IndexType
           }
         };
@@ -176,9 +200,9 @@ impl DataStructure for HalfEdge {
         })
       }
 
-      face_refs.push(FaceRef {
+      face_refs.push(Some(FaceRef {
         half_edge_idx: start_idx,
-      });
+      }));
     }
 
     let vertex_length = vertex_refs.len() as IndexType;
@@ -189,6 +213,9 @@ impl DataStructure for HalfEdge {
       vertex_refs,
       edge_refs,
       face_refs,
+      num_removed_vertices: 0,
+      num_removed_edges: 0,
+      num_removed_faces: 0,
     };
 
     for idx in 0..vertex_length {
@@ -202,41 +229,68 @@ impl DataStructure for HalfEdge {
     out
   }
 
-  // TODO: filtering
-  fn num_vertices(&self) -> usize {
+  fn max_idx_vertices(&self) -> usize {
     self.vertex_refs.len()
   }
 
-  // TODO: filtering
-  fn num_edges(&self) -> usize {
+  fn max_idx_edges(&self) -> usize {
     self.edge_refs.len()
   }
 
-  // TODO: filtering
-  fn num_faces(&self) -> usize {
+  fn max_idx_faces(&self) -> usize {
     self.face_refs.len()
   }
 
-  type EdgeKey = IndexType;
-  type VertexKey = IndexType;
-  type IterEdgeKeys = std::ops::Range<IndexType>;
-  type IterVertexKeys = std::ops::Range<IndexType>;
-
-  // TODO: filtering
-  fn edge_keys(&self) -> Self::IterEdgeKeys {
-    0..(self.edge_refs.len() as IndexType)
+  fn num_vertices(&self) -> usize {
+    self.vertex_refs.len() - self.num_removed_vertices
   }
 
-  // TODO: filtering
-  fn vertex_keys(&self) -> Self::IterVertexKeys {
-    0..(self.vertex_refs.len() as IndexType)
+  fn num_edges(&self) -> usize {
+    self.edge_refs.len() - self.num_removed_edges
   }
 
-  fn flip_edge(&mut self, key: &Self::EdgeKey) {
+  fn num_faces(&self) -> usize {
+    self.face_refs.len() - self.num_removed_faces
+  }
+
+  type VertexIdx = IndexType;
+  type EdgeIdx = IndexType;
+  type FaceIdx = IndexType;
+
+  // TODO: generic
+  fn initial_vertex(&self) -> Option<Self::VertexIdx> {
+    HalfEdge::get_at(0, &self.vertex_refs)
+  }
+
+  fn next_vertex(&self, key: Self::VertexIdx) -> Option<Self::VertexIdx> {
+    HalfEdge::get_at(key + 1, &self.vertex_refs)
+  }
+
+  fn initial_edge(&self) -> Option<Self::EdgeIdx> {
+    HalfEdge::get_at(0, &self.edge_refs)
+  }
+
+  fn next_edge(&self, key: Self::EdgeIdx) -> Option<Self::EdgeIdx> {
+    HalfEdge::get_at(key + 1, &self.edge_refs)
+  }
+
+  // fn initial_face(&self) -> Option<Self::FaceIdx> {
+  //   if self.face_refs.is_empty() { None } else { Some(0) }
+  // }
+
+  // fn next_face(&self, key: Self::FaceIdx) -> Option<Self::FaceIdx> {
+  //   if key + 1 < self.face_refs.len() as IndexType {
+  //     Some(key + 1)
+  //   } else {
+  //     None
+  //   }
+  // }
+
+  fn flip_edge(&mut self, key: Self::EdgeIdx) {
     // see page 24 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d reference
 
-    let edge = &self.edge_refs[*key as usize];
+    let edge = &self.edge_refs[key as usize].as_ref().unwrap();
 
     let b_c_idx = edge.half_edge_idx;
     let b_c_half_edge = self.relative_get(b_c_idx, Offset::Current);
@@ -284,11 +338,23 @@ impl DataStructure for HalfEdge {
       self.half_edge_refs[d_c_idx as usize].next_idx = c_a_idx;
       self.half_edge_refs[a_b_idx as usize].next_idx = b_d_idx;
 
-      self.face_refs[c_a_d_face as usize].half_edge_idx = c_a_idx;
-      self.face_refs[b_a_d_face as usize].half_edge_idx = b_d_idx;
+      self.face_refs[c_a_d_face as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = c_a_idx;
+      self.face_refs[b_a_d_face as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = b_d_idx;
 
-      self.vertex_refs[c_vertex_idx as usize].half_edge_idx = c_a_idx;
-      self.vertex_refs[b_vertex_idx as usize].half_edge_idx = b_d_idx;
+      self.vertex_refs[c_vertex_idx as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = c_a_idx;
+      self.vertex_refs[b_vertex_idx as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = b_d_idx;
 
       self.verify_half_edge_valid(c_a_idx);
       self.verify_half_edge_valid(b_d_idx);
@@ -307,12 +373,12 @@ impl DataStructure for HalfEdge {
 
   fn split_edge(
     &mut self,
-    key: &Self::EdgeKey,
-  ) -> (Self::VertexKey, [Self::EdgeKey; 4]) {
+    key: Self::EdgeIdx,
+  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]) {
     // see page 26 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d,m reference
 
-    let edge = &self.edge_refs[*key as usize];
+    let edge = &self.edge_refs[key as usize].as_ref().unwrap();
 
     // b->c will become m->c
     let b_c_idx = edge.half_edge_idx;
@@ -366,17 +432,26 @@ impl DataStructure for HalfEdge {
       self.verify_vertex_valid(d_vertex_idx);
 
       // ensure still valid
-      self.vertex_refs[b_vertex_idx as usize].half_edge_idx = b_d_idx;
-      self.vertex_refs[c_vertex_idx as usize].half_edge_idx = c_a_idx;
+      self.vertex_refs[b_vertex_idx as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = b_d_idx;
+      self.vertex_refs[c_vertex_idx as usize]
+        .as_mut()
+        .unwrap()
+        .half_edge_idx = c_a_idx;
 
       // new vertex (m)
       let m_vertex_idx = self.vertex_refs.len() as IndexType;
 
       // add vertex m (for now copy of b)
-      self.vertex_refs.push(VertexRef {
+      self.vertex_refs.push(Some(VertexRef {
         half_edge_idx: m_c_idx,
-        vertex: self.vertex_refs[b_vertex_idx as usize].vertex,
-      });
+        vertex: self.vertex_refs[b_vertex_idx as usize]
+          .as_ref()
+          .unwrap()
+          .vertex,
+      }));
 
       // EDGES:
 
@@ -384,23 +459,23 @@ impl DataStructure for HalfEdge {
       //  - m<->d
       //  - m<->b
       //  - m<->a
-      let m_c_edge_idx = *key;
+      let m_c_edge_idx = key;
       let m_d_edge_idx = self.edge_refs.len() as IndexType;
       let m_b_edge_idx = (self.edge_refs.len() + 1) as IndexType;
       let m_a_edge_idx = (self.edge_refs.len() + 2) as IndexType;
 
       // m_d
-      self.edge_refs.push(EdgeRef {
+      self.edge_refs.push(Some(EdgeRef {
         half_edge_idx: m_d_idx,
-      });
+      }));
       // m_b
-      self.edge_refs.push(EdgeRef {
+      self.edge_refs.push(Some(EdgeRef {
         half_edge_idx: m_b_idx,
-      });
+      }));
       // m_a
-      self.edge_refs.push(EdgeRef {
+      self.edge_refs.push(Some(EdgeRef {
         half_edge_idx: m_a_idx,
-      });
+      }));
 
       // FACES:
 
@@ -415,20 +490,20 @@ impl DataStructure for HalfEdge {
       let m_a_b_face_idx = self.face_refs.len() as IndexType;
       let m_b_d_face_idx = (self.face_refs.len() + 1) as IndexType;
 
-      self.face_refs[m_d_c_face_idx as usize] = FaceRef {
+      self.face_refs[m_d_c_face_idx as usize] = Some(FaceRef {
         half_edge_idx: c_m_idx,
-      };
-      self.face_refs[m_c_a_face_idx as usize] = FaceRef {
+      });
+      self.face_refs[m_c_a_face_idx as usize] = Some(FaceRef {
         half_edge_idx: m_c_idx,
-      };
+      });
       // mab
-      self.face_refs.push(FaceRef {
+      self.face_refs.push(Some(FaceRef {
         half_edge_idx: m_a_idx,
-      });
+      }));
       // mbd
-      self.face_refs.push(FaceRef {
+      self.face_refs.push(Some(FaceRef {
         half_edge_idx: m_b_idx,
-      });
+      }));
 
       self.half_edge_refs[m_c_idx as usize].vertex_idx = m_vertex_idx;
       self.half_edge_refs[c_m_idx as usize].next_idx = m_d_idx;
@@ -524,43 +599,246 @@ impl DataStructure for HalfEdge {
     }
   }
 
-  fn set_position(&mut self, key: &Self::VertexKey, position: &Vertex) {
-    self.vertex_refs[*key as usize].vertex = *position;
+  fn collapse_edge(
+    &mut self,
+    key: Self::EdgeIdx,
+  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]) {
+    // see page 28 of lecture slides "meshes_geoprocessing" for
+    // a,b,c,d,m reference
+
+    // remove d, d<->a, d<->b
+
+    let edge = &self.edge_refs[key as usize].as_ref().unwrap();
+
+    // c->d will be removed
+    let c_d_idx = edge.half_edge_idx;
+
+    let twin_idx = self.relative_get(c_d_idx, Offset::Current).twin_idx;
+
+    if let Some(d_c_idx) = twin_idx {
+      // remove d->a
+      let d_a_idx = self.relative_get(c_d_idx, Offset::Current).next_idx;
+      // remove a->c
+      let a_c_idx = self.relative_get(c_d_idx, Offset::Next).next_idx;
+
+      // remove c->b
+      let c_b_idx = self.relative_get(d_c_idx, Offset::Current).next_idx;
+      // remove b->d
+      let b_d_idx = self.relative_get(d_c_idx, Offset::Next).next_idx;
+
+      // will be removed
+      let c_vertex_idx = self.relative_get(c_d_idx, Offset::Current).vertex_idx;
+      // will become m
+      let d_vertex_idx = self.relative_get(d_c_idx, Offset::Current).vertex_idx;
+      let a_vertex_idx = self.relative_get(a_c_idx, Offset::Current).vertex_idx;
+      let b_vertex_idx = self.relative_get(b_d_idx, Offset::Current).vertex_idx;
+
+      self.vertex_refs[c_vertex_idx as usize] = None;
+
+      self.num_removed_vertices += 1;
+
+      let m_vertex_idx = d_vertex_idx;
+
+      // TODO
+      let m_b_idx = self.relative_get(b_d_idx, Offset::Current).twin_idx;
+
+      self.vertex_refs[m_vertex_idx as usize] =
+        m_b_idx.map(|half_edge_idx| VertexRef {
+          vertex: self.vertex_refs[m_vertex_idx as usize]
+            .as_ref()
+            .unwrap()
+            .vertex,
+          half_edge_idx,
+        });
+
+      // d<->a retained
+      let d_a_edge_idx = self.relative_get(d_a_idx, Offset::Current).edge_idx;
+      // b<->d retained
+      let b_d_edge_idx = self.relative_get(b_d_idx, Offset::Current).edge_idx;
+      let m_a_edge_idx = d_a_edge_idx;
+      let b_m_edge_idx = b_d_edge_idx;
+
+      // c<->a removed
+      let c_a_edge_idx = self.relative_get(a_c_idx, Offset::Current).edge_idx;
+      // b<->c removed
+      let b_c_edge_idx = self.relative_get(c_b_idx, Offset::Current).edge_idx;
+
+      self.edge_refs[c_a_edge_idx as usize] = None;
+      self.edge_refs[b_c_edge_idx as usize] = None;
+
+      self.num_removed_edges += 2;
+
+      // faces are removed
+      let c_a_d_face_idx = self.relative_get(c_d_idx, Offset::Current).face_idx;
+      let c_b_d_face_idx = self.relative_get(d_c_idx, Offset::Current).face_idx;
+
+      self.face_refs[c_a_d_face_idx as usize] = None;
+      self.face_refs[c_b_d_face_idx as usize] = None;
+
+      self.num_removed_faces += 2;
+
+      // reassign half_edges which had vertex c
+      let mut next = self.relative_get(a_c_idx, Offset::Current).twin_idx;
+
+      let mut to_end = false;
+
+      while let Some(next_idx) = next {
+        if next_idx == c_b_idx {
+          to_end = true;
+          break;
+        }
+        debug_assert_ne!(next_idx, c_d_idx);
+        debug_assert_eq!(
+          self.half_edge_refs[next_idx as usize].vertex_idx,
+          c_vertex_idx
+        );
+        self.half_edge_refs[next_idx as usize].vertex_idx = m_vertex_idx;
+        next = self.relative_get(next_idx, Offset::NextNext).twin_idx;
+      }
+
+      // some boundary
+      if !to_end {
+        let mut next = self
+          .relative_get(c_b_idx, Offset::Current)
+          .twin_idx
+          .map(|idx| self.relative_get(idx, Offset::Current).next_idx);
+
+        while let Some(next_idx) = next {
+          // if boundary, we shouldn't wrap
+          debug_assert_ne!(next_idx, c_d_idx);
+          debug_assert_eq!(
+            self.half_edge_refs[next_idx as usize].vertex_idx,
+            c_vertex_idx
+          );
+
+          self.half_edge_refs[next_idx as usize].vertex_idx = m_vertex_idx;
+          next = self.relative_get(next_idx, Offset::NextNext).twin_idx;
+        }
+      }
+
+      // TODO: consider rename
+      let mut combine_twins = |first, second, edge_idx, vertex_idx| {
+        // TODO: fix vertex behavior in boundary case
+        if let Some(c_a_idx) =
+          self.relative_get(first, Offset::Current).twin_idx
+        {
+          if let Some(a_d_idx) =
+            self.relative_get(second, Offset::Current).twin_idx
+          {
+            self.vertex_refs[vertex_idx as usize]
+              .as_mut()
+              .unwrap()
+              .half_edge_idx = a_d_idx;
+
+            self.half_edge_refs[c_a_idx as usize].twin_idx = Some(a_d_idx);
+            self.half_edge_refs[a_d_idx as usize].twin_idx = Some(c_a_idx);
+            self.half_edge_refs[c_a_idx as usize].edge_idx = edge_idx;
+            self.half_edge_refs[a_d_idx as usize].edge_idx = edge_idx;
+          } else {
+            self.half_edge_refs[c_a_idx as usize].twin_idx = None;
+            self.half_edge_refs[c_a_idx as usize].edge_idx = edge_idx;
+          }
+        } else if let Some(a_d_idx) =
+          self.relative_get(second, Offset::Current).twin_idx
+        {
+          self.half_edge_refs[a_d_idx as usize].twin_idx = None;
+          self.half_edge_refs[a_d_idx as usize].edge_idx = edge_idx;
+        }
+      };
+
+      // self.vertex_refs[a_vertex_idx as usize].as_mut().unwrap().half_edge_idx =
+      // self.vertex_refs[c_vertex_idx as usize] = None;
+
+      combine_twins(a_c_idx, d_a_idx, m_a_edge_idx, a_vertex_idx);
+      combine_twins(b_d_idx, c_b_idx, b_m_edge_idx, b_vertex_idx);
+
+      self.verify_vertex_valid(m_vertex_idx);
+
+      (
+        m_vertex_idx,
+        [m_a_edge_idx, b_m_edge_idx, c_a_edge_idx, b_c_edge_idx],
+      )
+    } else {
+      panic!("AHHHH boundary");
+    }
   }
 
-  fn get_position(&self, key: &Self::VertexKey) -> Vertex {
-    self.vertex_refs[*key as usize].vertex
+  fn set_position(&mut self, key: Self::VertexIdx, position: &Vertex) {
+    self.vertex_refs[key as usize].as_mut().unwrap().vertex = *position;
+  }
+
+  fn get_position(&self, key: Self::VertexIdx) -> Vertex {
+    self.vertex_refs[key as usize].as_ref().unwrap().vertex
   }
 
   fn get_vertex_neighbors(
     &self,
-    key: &Self::VertexKey,
-    neighbors: &mut Vec<Self::VertexKey>,
-  ) {
-    let half_edge_idx_orig = self.vertex_refs[*key as usize].half_edge_idx;
+    key: Self::VertexIdx,
+    neighbors: &mut Vec<Self::VertexIdx>,
+  ) -> bool {
+    let half_edge_idx_orig = self.vertex_refs[key as usize]
+      .as_ref()
+      .unwrap()
+      .half_edge_idx;
     let mut half_edge_idx = half_edge_idx_orig;
 
-    neighbors.clear();
-
     let mut first = true;
+    let mut has_boundary = false;
 
+    // iterate until we hit one side
     while first || half_edge_idx != half_edge_idx_orig {
-      neighbors.push(self.relative_get(half_edge_idx, Offset::Next).vertex_idx);
-      half_edge_idx = self
-        .relative_get(half_edge_idx, Offset::NextNext)
-        .twin_idx
-        .expect("TODO, fix for boundary case"); // requires both sides
+      let next_edge = self.relative_get(half_edge_idx, Offset::NextNext);
+      if let Some(new_half_edge_idx) = next_edge.twin_idx {
+        half_edge_idx = new_half_edge_idx;
+      } else {
+        has_boundary = true;
+        break;
+      }
 
       first = false;
     }
+
+    neighbors.clear();
+
+    let mut half_edge_idx_in =
+      self.relative_get(half_edge_idx, Offset::Next).next_idx;
+    let half_edge_idx_orig_in = half_edge_idx_in;
+
+    first = true;
+
+    neighbors.push(
+      self
+        .relative_get(half_edge_idx_in, Offset::Current)
+        .vertex_idx,
+    );
+
+    // iterate from one side in other direction
+    while first || half_edge_idx_in != half_edge_idx_orig_in {
+      neighbors.push(
+        self
+          .relative_get(half_edge_idx_in, Offset::NextNext)
+          .vertex_idx,
+      );
+      if let Some(new_half_edge_idx_in) =
+        self.relative_get(half_edge_idx_in, Offset::Next).twin_idx
+      {
+        half_edge_idx_in = new_half_edge_idx_in;
+      } else {
+        break;
+      }
+
+      first = false;
+    }
+
+    has_boundary
   }
 
   fn get_edge_neighbors(
     &self,
-    key: &Self::EdgeKey,
-  ) -> ([Self::VertexKey; 3], Option<Self::VertexKey>) {
+    key: Self::EdgeIdx,
+  ) -> ([Self::VertexIdx; 3], Option<Self::VertexIdx>) {
     let half_edge = self.relative_get(
-      self.edge_refs[*key as usize].half_edge_idx,
+      self.edge_refs[key as usize].as_ref().unwrap().half_edge_idx,
       Offset::Current,
     );
     (
@@ -579,9 +857,9 @@ impl DataStructure for HalfEdge {
     )
   }
 
-  fn get_endpoints(&self, key: &Self::EdgeKey) -> [Self::VertexKey; 2] {
+  fn get_endpoints(&self, key: Self::EdgeIdx) -> [Self::VertexIdx; 2] {
     let half_edge = self.relative_get(
-      self.edge_refs[*key as usize].half_edge_idx,
+      self.edge_refs[key as usize].as_ref().unwrap().half_edge_idx,
       Offset::Current,
     );
     [
@@ -592,21 +870,37 @@ impl DataStructure for HalfEdge {
     ]
   }
 
-  fn to_vecs(&mut self) -> (Vec<Vertex>, Vec<Face>) {
-    self.collapse();
+  fn to_vecs(self) -> (Vec<Vertex>, Vec<Face>) {
+    // TODO: GROSS
+    let mut exclusive_sum = Vec::with_capacity(self.vertex_refs.len());
 
-    let mut vertices = Vec::new();
+    let mut sum = 0;
 
-    for v in &self.vertex_refs {
-      vertices.push(v.vertex);
+    for vertex in &self.vertex_refs {
+      exclusive_sum.push(sum);
+      if vertex.is_some() {
+        sum += 1;
+      }
     }
 
-    let mut faces = Vec::new();
-
-    for i in 0..(self.face_refs.len() as IndexType) {
-      faces.push(self.get_face_neighbors(&i));
-    }
-
-    (vertices, faces)
+    (
+      self
+        .vertex_refs
+        .iter()
+        .filter_map(|v| v.as_ref())
+        .map(|v| v.vertex)
+        .collect(),
+      (0..(self.face_refs.len() as IndexType))
+        .map(|i| self.get_face_neighbors(&i))
+        .filter_map(|x| x)
+        .map(|v| {
+          v.iter()
+            .map(|index| exclusive_sum[*index as usize])
+            .collect::<Vec<IndexType>>()[..]
+            .try_into()
+            .unwrap()
+        })
+        .collect(),
+    )
   }
 }

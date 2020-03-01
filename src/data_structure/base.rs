@@ -1,6 +1,6 @@
 use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
+use std::hash::Hash;
+use std::io::{prelude::*, BufWriter};
 use std::path::Path;
 
 use nalgebra::base::Vector3;
@@ -46,66 +46,83 @@ pub trait DataStructure: Sized {
     Ok(Self::from_iters(vertices, faces))
   }
 
+  fn max_idx_vertices(&self) -> usize;
+
+  fn max_idx_edges(&self) -> usize;
+
+  fn max_idx_faces(&self) -> usize;
+
   fn num_vertices(&self) -> usize;
 
   fn num_edges(&self) -> usize;
 
   fn num_faces(&self) -> usize;
 
-  type VertexKey: Sized + std::fmt::Debug + Eq;
-  type EdgeKey: Sized + std::fmt::Debug + Eq;
-  // type FaceKey: Sized + std::fmt::Debug + Eq;
-  type IterVertexKeys: Iterator<Item = Self::VertexKey>;
-  type IterEdgeKeys: Iterator<Item = Self::EdgeKey>;
-  // type IterFaceKeys: Iterator<Item = Self::FaceKey>;
+  type VertexIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
 
-  fn vertex_keys(&self) -> Self::IterVertexKeys;
+  type EdgeIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
 
-  fn edge_keys(&self) -> Self::IterEdgeKeys;
+  type FaceIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
 
-  // fn face_keys(&self) -> Self::IterFaceKeys;
+  fn initial_vertex(&self) -> Option<Self::VertexIdx>;
 
-  fn flip_edge(&mut self, key: &Self::EdgeKey);
+  fn next_vertex(&self, key: Self::VertexIdx) -> Option<Self::VertexIdx>;
+
+  fn initial_edge(&self) -> Option<Self::EdgeIdx>;
+
+  fn next_edge(&self, key: Self::EdgeIdx) -> Option<Self::EdgeIdx>;
+
+  // fn initial_face(&self) -> Option<Self::FaceIdx>;
+
+  // fn next_face(&self, key: Self::FaceIdx) -> Option<Self::FaceIdx>;
+
+  fn flip_edge(&mut self, key: Self::EdgeIdx);
 
   // order of returned edges:
   // original edge left, original edge right
   // new edge top, new edge bottom (same order as get_opposite_points)
   fn split_edge(
     &mut self,
-    key: &Self::EdgeKey,
-  ) -> (Self::VertexKey, [Self::EdgeKey; 4]);
+    key: Self::EdgeIdx,
+  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]);
 
-  // fn collapse_edge(&mut self, key: &Self::EdgeKey) -> Self::VertexKey;
+  // new vertex
+  // modified edge, modified edge
+  // removed edge, removed edge
+  fn collapse_edge(
+    &mut self,
+    key: Self::EdgeIdx,
+  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]);
 
-  fn set_position(&mut self, key: &Self::VertexKey, position: &Vertex);
+  fn set_position(&mut self, key: Self::VertexIdx, position: &Vertex);
 
-  fn get_position(&self, key: &Self::VertexKey) -> Vertex;
+  fn get_position(&self, key: Self::VertexIdx) -> Vertex;
 
+  // first is next to second is next to third...
+  // return value is if there is discontinutity...
   fn get_vertex_neighbors(
     &self,
-    key: &Self::VertexKey,
-    neighbors: &mut Vec<Self::VertexKey>,
-  );
+    key: Self::VertexIdx,
+    neighbors: &mut Vec<Self::VertexIdx>,
+  ) -> bool;
 
   // endpoint, endpoint, and far points of adjacent faces
   fn get_edge_neighbors(
     &self,
-    key: &Self::EdgeKey,
-  ) -> ([Self::VertexKey; 3], Option<Self::VertexKey>);
+    key: Self::EdgeIdx,
+  ) -> ([Self::VertexIdx; 3], Option<Self::VertexIdx>);
 
   // fn get_face_neighbors(
   //   &self,
-  //   key: &Self::FaceKey,
-  //   neighbors: &mut Vec<Self::VertexKey>,
+  //   key: Self::FaceIdx,
+  //   neighbors: &mut Vec<Self::VertexIdx>,
   // );
 
-  fn get_endpoints(&self, key: &Self::EdgeKey) -> [Self::VertexKey; 2];
+  fn get_endpoints(&self, key: Self::EdgeIdx) -> [Self::VertexIdx; 2];
 
-  // fn get_face_edges(&self, key: &Self::FaceKey) -> [Self::FaceKey; 3];
+  // fn get_face_edges(&self, key: Self::FaceIdx) -> [Self::FaceIdx; 3];
 
-  fn to_vecs(&mut self) -> (Vec<Vertex>, Vec<Face>);
-
-  fn save_obj(&mut self, path: &Path) -> std::io::Result<()> {
+  fn save_obj(self, path: &Path) -> std::io::Result<()> {
     let mut writer = BufWriter::new(File::create(path)?);
 
     let (vertices, faces) = self.to_vecs();
@@ -121,11 +138,13 @@ pub trait DataStructure: Sized {
         face[0] + 1,
         face[1] + 1,
         face[2] + 1
-      )?
+      )?;
     }
 
     writer.flush()?;
 
     Ok(())
   }
+
+  fn to_vecs(self) -> (Vec<Vertex>, Vec<Face>);
 }
