@@ -86,7 +86,7 @@ impl Operation for Subdivide {
         }
       }
 
-      assert_eq!(to_flip.len(), faces_before);
+      debug_assert_eq!(to_flip.len(), faces_before);
 
       for flip_edge in to_flip {
         mesh.flip_edge(&flip_edge);

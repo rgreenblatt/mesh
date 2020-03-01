@@ -64,27 +64,35 @@ impl HalfEdge {
     }
   }
 
+  #[cfg(debug_assertions)]
   fn verify_half_edge_valid(&self, half_edge_idx: IndexType) {
     let half_edge = &self.half_edge_refs[half_edge_idx as usize];
-    assert_eq!(
+    debug_assert_eq!(
       self.relative_get(half_edge_idx, Offset::Next).vertex_idx,
       self.half_edge_refs[half_edge.twin_idx.unwrap() as usize].vertex_idx
     );
 
-    assert_eq!(
+    debug_assert_eq!(
       self.relative_get(half_edge_idx, Offset::NextNext).next_idx,
       half_edge_idx
     );
   }
 
+  #[cfg(not(debug_assertions))]
+  fn verify_half_edge_valid(&self, _: IndexType) {}
+
+  #[cfg(debug_assertions)]
   fn verify_vertex_valid(&self, vertex: IndexType) {
     let mut neighbors = Vec::new();
     self.get_vertex_neighbors(&vertex, &mut neighbors);
-    assert!(!neighbors.contains(&vertex));
+    debug_assert!(!neighbors.contains(&vertex));
     for idx in neighbors {
       self.verify_half_edge_valid(self.vertex_refs[idx as usize].half_edge_idx)
     }
   }
+
+  #[cfg(not(debug_assertions))]
+  fn verify_vertex_valid(&self, _: IndexType) {}
 
   fn get_face_neighbors(&self, face: &IndexType) -> [IndexType; 3] {
     let half_edge = &self.half_edge_refs
