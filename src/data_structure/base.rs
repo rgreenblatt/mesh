@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::hash::Hash;
 use std::io::{prelude::*, BufWriter};
 use std::path::Path;
 
@@ -7,6 +6,7 @@ use nalgebra::base::Vector3;
 
 pub type Vertex = Vector3<f32>;
 pub type Face = [u32; 3];
+pub type IndexType = u32;
 
 pub trait DataStructure: Sized {
   fn from_iters<IterVert, IterFace>(
@@ -58,69 +58,57 @@ pub trait DataStructure: Sized {
 
   fn num_faces(&self) -> usize;
 
-  type VertexIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
+  // TODO: generic?
+  fn initial_vertex(&self) -> Option<IndexType>;
 
-  type EdgeIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
+  fn next_vertex(&self, key: IndexType) -> Option<IndexType>;
 
-  type FaceIdx: Sized + std::fmt::Debug + Eq + Copy + Hash;
+  fn initial_edge(&self) -> Option<IndexType>;
 
-  fn initial_vertex(&self) -> Option<Self::VertexIdx>;
+  fn next_edge(&self, key: IndexType) -> Option<IndexType>;
 
-  fn next_vertex(&self, key: Self::VertexIdx) -> Option<Self::VertexIdx>;
+  fn initial_face(&self) -> Option<IndexType>;
 
-  fn initial_edge(&self) -> Option<Self::EdgeIdx>;
+  fn next_face(&self, key: IndexType) -> Option<IndexType>;
 
-  fn next_edge(&self, key: Self::EdgeIdx) -> Option<Self::EdgeIdx>;
-
-  // fn initial_face(&self) -> Option<Self::FaceIdx>;
-
-  // fn next_face(&self, key: Self::FaceIdx) -> Option<Self::FaceIdx>;
-
-  fn flip_edge(&mut self, key: Self::EdgeIdx);
+  fn flip_edge(&mut self, key: IndexType);
 
   // order of returned edges:
   // original edge left, original edge right
   // new edge top, new edge bottom (same order as get_opposite_points)
-  fn split_edge(
-    &mut self,
-    key: Self::EdgeIdx,
-  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]);
+  fn split_edge(&mut self, key: IndexType) -> (IndexType, [IndexType; 4]);
 
-  // new vertex
-  // modified edge, modified edge
-  // removed edge, removed edge
-  fn collapse_edge(
-    &mut self,
-    key: Self::EdgeIdx,
-  ) -> (Self::VertexIdx, [Self::EdgeIdx; 4]);
+  // new vertex, new vertex for modified 0, new vertex for modified 1
+  // modified edge 0, modified edge 1, removed edge 0, removed edge 1
+  fn collapse_edge(&mut self, key: IndexType) -> ([IndexType; 3], [IndexType; 4]);
 
-  fn set_position(&mut self, key: Self::VertexIdx, position: &Vertex);
+  fn set_position(&mut self, key: IndexType, position: &Vertex);
 
-  fn get_position(&self, key: Self::VertexIdx) -> Vertex;
+  fn get_position(&self, key: IndexType) -> Vertex;
 
   // first is next to second is next to third...
   // return value is if there is discontinutity...
   fn get_vertex_neighbors(
     &self,
-    key: Self::VertexIdx,
-    neighbors: &mut Vec<Self::VertexIdx>,
+    key: IndexType,
+    neighbors: &mut Vec<IndexType>,
+  ) -> bool;
+
+  fn get_vertex_adjacent_faces(
+    &self,
+    key: IndexType,
+    faces: &mut Vec<IndexType>,
   ) -> bool;
 
   // endpoint, endpoint, and far points of adjacent faces
   fn get_edge_neighbors(
     &self,
-    key: Self::EdgeIdx,
-  ) -> ([Self::VertexIdx; 3], Option<Self::VertexIdx>);
+    key: IndexType,
+  ) -> ([IndexType; 3], Option<IndexType>);
 
-  // fn get_face_neighbors(
-  //   &self,
-  //   key: Self::FaceIdx,
-  //   neighbors: &mut Vec<Self::VertexIdx>,
-  // );
+  fn get_face_neighbors(&self, key: IndexType) -> [IndexType; 3];
 
-  fn get_endpoints(&self, key: Self::EdgeIdx) -> [Self::VertexIdx; 2];
-
-  // fn get_face_edges(&self, key: Self::FaceIdx) -> [Self::FaceIdx; 3];
+  fn get_endpoints(&self, key: IndexType) -> [IndexType; 2];
 
   fn save_obj(self, path: &Path) -> std::io::Result<()> {
     let mut writer = BufWriter::new(File::create(path)?);
