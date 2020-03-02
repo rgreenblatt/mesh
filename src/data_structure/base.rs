@@ -86,6 +86,11 @@ pub trait DataStructure: Sized {
 
   fn get_position(&self, key: IndexType) -> Vertex;
 
+  fn degree(
+    &self,
+    vertex_idx: IndexType,
+  ) -> usize;
+
   // first is next to second is next to third...
   // return value is if there is discontinutity...
   fn get_vertex_neighbors(

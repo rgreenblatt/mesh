@@ -4,9 +4,7 @@ use crate::IndexType;
 use crate::Vertex;
 
 use clap::Clap;
-use nalgebra::base::{
-  dimension::U1, Matrix4, RowVector4, SliceStorage, Vector4,
-};
+use nalgebra::base::{dimension::U1, Matrix4, Vector4};
 use ordered_float::NotNan;
 
 use std::cmp::Reverse;
@@ -75,8 +73,26 @@ fn get_best_position_cost<D: DataStructure>(
   let cost =
     (optimal_position_4.transpose() * combined_quadric * optimal_position_4)[0];
 
-  dbg!(optimal_position_4);
-  dbg!(combined_quadric);
+  if cfg!(debug_assertions) {
+    let mut neighbors = Vec::new();
+
+    mesh.get_vertex_neighbors(vertex_first, &mut neighbors);
+    debug_assert!(neighbors.contains(&vertex_second));
+    mesh.get_vertex_neighbors(vertex_second, &mut neighbors);
+    debug_assert!(neighbors.contains(&vertex_first));
+  }
+
+  if cost <= 0.0 {
+    dbg!(optimal_position_4);
+    dbg!(combined_quadric);
+    dbg!(vertex_first);
+    dbg!(vertex_second);
+
+    dbg!(mesh.get_position(vertex_first));
+    dbg!(mesh.get_position(vertex_second));
+
+    dbg!(cost);
+  }
 
   debug_assert!(cost > 0.0);
 
@@ -112,11 +128,15 @@ impl Operation for Simplify {
       } else {
         mesh.get_vertex_adjacent_faces(vertex_idx, &mut adjacent_faces);
 
-        let quadric = adjacent_faces
-          .iter()
-          .fold(Matrix4::zeros(), |acc, face_idx| {
-            acc + get_face_quadric(*face_idx)
-          });
+        let quadric =
+          adjacent_faces
+            .iter()
+            .fold(Matrix4::zeros(), |acc, face_idx| {
+              if vertex_idx == 869 || vertex_idx == 946 {
+                dbg!(face_idx);
+              }
+              acc + get_face_quadric(*face_idx)
+            });
 
         vertex_quadrics[vertex_idx as usize] = Some(quadric);
 
@@ -163,7 +183,9 @@ impl Operation for Simplify {
 
     while mesh.num_faces() >= final_num_faces {
       let EdgeCost {
-        edge_idx, count, cost
+        edge_idx,
+        count,
+        cost,
       } = edge_heap.pop().expect("Heap shouldn't be empty");
 
       // TODO: when will this occur

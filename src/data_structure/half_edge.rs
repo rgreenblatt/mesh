@@ -3,8 +3,9 @@ use crate::data_structure::base::IndexType;
 use crate::data_structure::base::Vertex;
 use crate::data_structure::DataStructure;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::iter::FromIterator;
 
 struct HalfEdgeRef {
   twin_idx: Option<IndexType>,
@@ -99,6 +100,19 @@ impl HalfEdge {
             .half_edge_idx,
         )
       }
+    }
+  }
+
+  fn verify_edge_valid(&self, edge_idx: IndexType) {
+    if cfg!(debug_assertions) {
+      let [left, right] = self.get_endpoints(edge_idx);
+      if edge_idx == 25 {
+        dbg!(left);
+        dbg!(right);
+      }
+      debug_assert_ne!(left, right);
+      self.verify_vertex_valid(left);
+      self.verify_vertex_valid(right);
     }
   }
 
@@ -614,7 +628,10 @@ impl DataStructure for HalfEdge {
     }
   }
 
-  fn collapse_edge(&mut self, key: IndexType) -> ([IndexType; 3], [IndexType; 4]) {
+  fn collapse_edge(
+    &mut self,
+    key: IndexType,
+  ) -> ([IndexType; 3], [IndexType; 4]) {
     // see page 28 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d,m reference
 
@@ -645,11 +662,68 @@ impl DataStructure for HalfEdge {
       let a_vertex_idx = self.relative_get(a_c_idx, Offset::Current).vertex_idx;
       let b_vertex_idx = self.relative_get(b_d_idx, Offset::Current).vertex_idx;
 
+      debug_assert_ne!(a_vertex_idx, c_vertex_idx);
+      debug_assert_ne!(b_vertex_idx, c_vertex_idx);
+      debug_assert_ne!(d_vertex_idx, c_vertex_idx);
+      debug_assert_ne!(a_vertex_idx, d_vertex_idx);
+      debug_assert_ne!(b_vertex_idx, d_vertex_idx);
+      debug_assert_ne!(a_vertex_idx, b_vertex_idx);
+
+      if cfg!(debug_assertions) {
+        let mut c_neighbors = Vec::new();
+        self.get_vertex_neighbors(c_vertex_idx, &mut c_neighbors);
+        let mut d_neighbors = Vec::new();
+        self.get_vertex_neighbors(d_vertex_idx, &mut d_neighbors);
+
+        let first_set = HashSet::<u32>::from_iter(c_neighbors.into_iter());
+        let second_set = HashSet::<u32>::from_iter(d_neighbors.into_iter());
+
+        for vertex_idx in first_set.intersection(&second_set) {
+          assert!(self.degree(*vertex_idx) > 3);
+        }
+      }
+
+      let m_vertex_idx = d_vertex_idx;
+
+      {
+        let (_, half_edge_idx) = self.get_start_iter_half_edge_idx(c_vertex_idx);
+
+        let mut half_edge_idx_in =
+          self.relative_get(half_edge_idx, Offset::Next).next_idx;
+        let half_edge_idx_orig_in = half_edge_idx_in;
+
+        let mut first = true;
+
+        while first || half_edge_idx_in != half_edge_idx_orig_in {
+          let this_edge_idx = self
+            .relative_get(half_edge_idx_in, Offset::Current)
+            .next_idx;
+
+          debug_assert_eq!(
+            self.relative_get(this_edge_idx, Offset::Current).vertex_idx,
+            c_vertex_idx
+          );
+
+          self.half_edge_refs[this_edge_idx as usize].vertex_idx = m_vertex_idx;
+
+          if let Some(new_half_edge_idx_in) =
+            self.relative_get(half_edge_idx_in, Offset::Next).twin_idx
+          {
+            half_edge_idx_in = new_half_edge_idx_in;
+          } else {
+            panic!("boundary!!!");
+            // break;
+          }
+
+          first = false;
+        }
+      }
+
+      dbg!(c_vertex_idx);
+
       self.vertex_refs[c_vertex_idx as usize] = None;
 
       self.num_removed_vertices += 1;
-
-      let m_vertex_idx = d_vertex_idx;
 
       // TODO
       let m_b_idx = self.relative_get(b_d_idx, Offset::Current).twin_idx;
@@ -690,43 +764,6 @@ impl DataStructure for HalfEdge {
       self.num_removed_faces += 2;
 
       // reassign half_edges which had vertex c
-      let mut next = self.relative_get(a_c_idx, Offset::Current).twin_idx;
-
-      let mut to_end = false;
-
-      while let Some(next_idx) = next {
-        if next_idx == c_b_idx {
-          to_end = true;
-          break;
-        }
-        debug_assert_ne!(next_idx, c_d_idx);
-        debug_assert_eq!(
-          self.half_edge_refs[next_idx as usize].vertex_idx,
-          c_vertex_idx
-        );
-        self.half_edge_refs[next_idx as usize].vertex_idx = m_vertex_idx;
-        next = self.relative_get(next_idx, Offset::NextNext).twin_idx;
-      }
-
-      // some boundary
-      if !to_end {
-        let mut next = self
-          .relative_get(c_b_idx, Offset::Current)
-          .twin_idx
-          .map(|idx| self.relative_get(idx, Offset::Current).next_idx);
-
-        while let Some(next_idx) = next {
-          // if boundary, we shouldn't wrap
-          debug_assert_ne!(next_idx, c_d_idx);
-          debug_assert_eq!(
-            self.half_edge_refs[next_idx as usize].vertex_idx,
-            c_vertex_idx
-          );
-
-          self.half_edge_refs[next_idx as usize].vertex_idx = m_vertex_idx;
-          next = self.relative_get(next_idx, Offset::NextNext).twin_idx;
-        }
-      }
 
       // TODO: consider rename
       let mut combine_twins = |first, second, edge_idx, vertex_idx| {
@@ -758,10 +795,16 @@ impl DataStructure for HalfEdge {
         }
       };
 
+      dbg!(a_vertex_idx);
+      dbg!(b_vertex_idx);
+      dbg!(m_vertex_idx);
+
       combine_twins(a_c_idx, d_a_idx, m_a_edge_idx, a_vertex_idx);
       combine_twins(b_d_idx, c_b_idx, b_m_edge_idx, b_vertex_idx);
 
       self.verify_vertex_valid(m_vertex_idx);
+      self.verify_edge_valid(m_a_edge_idx);
+      self.verify_edge_valid(b_m_edge_idx);
 
       (
         [m_vertex_idx, a_vertex_idx, b_vertex_idx],
@@ -778,6 +821,15 @@ impl DataStructure for HalfEdge {
 
   fn get_position(&self, key: IndexType) -> Vertex {
     self.vertex_refs[key as usize].as_ref().unwrap().vertex
+  }
+
+  fn degree(&self, vertex_idx: IndexType) -> usize {
+    // TODO: optimize
+    let mut neighbors = Vec::new();
+
+    self.get_vertex_neighbors(vertex_idx, &mut neighbors);
+
+    neighbors.len()
   }
 
   fn get_vertex_neighbors(
@@ -803,6 +855,11 @@ impl DataStructure for HalfEdge {
 
     // iterate from one side in other direction
     while first || half_edge_idx_in != half_edge_idx_orig_in {
+      debug_assert_eq!(
+        self.relative_get(half_edge_idx_in, Offset::Next).vertex_idx,
+        key
+      );
+
       neighbors.push(
         self
           .relative_get(half_edge_idx_in, Offset::NextNext)
