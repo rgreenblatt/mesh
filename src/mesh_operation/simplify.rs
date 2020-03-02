@@ -92,9 +92,11 @@ fn get_best_position_cost<D: DataStructure>(
     dbg!(mesh.get_position(vertex_second));
 
     dbg!(cost);
+    
+    dbg!("oh no!");
   }
 
-  debug_assert!(cost > 0.0);
+  // debug_assert!(cost > 0.0);
 
   (optimal_position, NotNan::new(cost).unwrap())
 }
@@ -206,56 +208,57 @@ impl Operation for Simplify {
       dbg!(count);
       dbg!(cost);
 
-      let (
+      if let Some((
         [new_vertex, edge_0_vertex, edge_1_vertex],
         [update_edge_0, update_edge_1, invalid_edge_0, invalid_edge_1],
-      ) = mesh.collapse_edge(edge_idx);
+      )) = mesh.collapse_edge(edge_idx)
+      {
+        dbg!(update_edge_0);
+        dbg!(update_edge_1);
+        dbg!(invalid_edge_0);
+        dbg!(invalid_edge_1);
 
-      dbg!(update_edge_0);
-      dbg!(update_edge_1);
-      dbg!(invalid_edge_0);
-      dbg!(invalid_edge_1);
+        mesh.set_position(new_vertex, &best_position);
 
-      mesh.set_position(new_vertex, &best_position);
+        edge_info[invalid_edge_0 as usize] = None;
+        edge_info[invalid_edge_1 as usize] = None;
 
-      edge_info[invalid_edge_0 as usize] = None;
-      edge_info[invalid_edge_1 as usize] = None;
+        let new_vertex_quadric = vertex_quadrics[first_vertex_idx as usize]
+          .unwrap()
+          + vertex_quadrics[second_vertex_idx as usize].unwrap();
 
-      let new_vertex_quadric = vertex_quadrics[first_vertex_idx as usize]
-        .unwrap()
-        + vertex_quadrics[second_vertex_idx as usize].unwrap();
+        vertex_quadrics[new_vertex as usize] = Some(new_vertex_quadric);
 
-      vertex_quadrics[new_vertex as usize] = Some(new_vertex_quadric);
+        let mut update = |vertex_idx, edge_idx| {
+          let (best_position, cost) = get_best_position_cost(
+            mesh,
+            new_vertex,
+            vertex_idx, // verify order unimportant
+            &new_vertex_quadric,
+            &vertex_quadrics[vertex_idx as usize].unwrap(),
+          );
 
-      let mut update = |vertex_idx, edge_idx| {
-        let (best_position, cost) = get_best_position_cost(
-          mesh,
-          new_vertex,
-          vertex_idx, // verify order unimportant
-          &new_vertex_quadric,
-          &vertex_quadrics[vertex_idx as usize].unwrap(),
-        );
+          let mut old_count = 0;
 
-        let mut old_count = 0;
+          if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
+            old_count = count;
+          }
 
-        if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
-          old_count = count;
-        }
+          let count = old_count + 1;
 
-        let count = old_count + 1;
+          edge_info[edge_idx as usize] =
+            Some((best_position, new_vertex, vertex_idx, count));
 
-        edge_info[edge_idx as usize] =
-          Some((best_position, new_vertex, vertex_idx, count));
+          edge_heap.push(EdgeCost {
+            edge_idx,
+            cost: Reverse(cost),
+            count,
+          });
+        };
 
-        edge_heap.push(EdgeCost {
-          edge_idx,
-          cost: Reverse(cost),
-          count,
-        });
-      };
-
-      update(edge_0_vertex, update_edge_0);
-      update(edge_1_vertex, update_edge_1);
+        update(edge_0_vertex, update_edge_0);
+        update(edge_1_vertex, update_edge_1);
+      }
     }
   }
 }

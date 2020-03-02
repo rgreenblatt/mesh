@@ -71,7 +71,7 @@ pub trait DataStructure: Sized {
 
   fn next_face(&self, key: IndexType) -> Option<IndexType>;
 
-  fn flip_edge(&mut self, key: IndexType);
+  fn flip_edge(&mut self, key: IndexType) -> Option<()>;
 
   // order of returned edges:
   // original edge left, original edge right
@@ -80,16 +80,16 @@ pub trait DataStructure: Sized {
 
   // new vertex, new vertex for modified 0, new vertex for modified 1
   // modified edge 0, modified edge 1, removed edge 0, removed edge 1
-  fn collapse_edge(&mut self, key: IndexType) -> ([IndexType; 3], [IndexType; 4]);
+  fn collapse_edge(
+    &mut self,
+    key: IndexType,
+  ) -> Option<([IndexType; 3], [IndexType; 4])>;
 
   fn set_position(&mut self, key: IndexType, position: &Vertex);
 
   fn get_position(&self, key: IndexType) -> Vertex;
 
-  fn degree(
-    &self,
-    vertex_idx: IndexType,
-  ) -> usize;
+  fn degree(&self, vertex_idx: IndexType) -> usize;
 
   // first is next to second is next to third...
   // return value is if there is discontinutity...

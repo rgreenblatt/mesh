@@ -95,7 +95,7 @@ impl Operation for Subdivide {
       debug_assert_eq!(to_flip.len(), faces_before);
 
       for flip_edge in to_flip {
-        mesh.flip_edge(flip_edge);
+        mesh.flip_edge(flip_edge).expect("should be valid flip");
       }
     }
   }

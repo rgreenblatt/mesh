@@ -103,7 +103,12 @@ impl HalfEdge {
     }
   }
 
-  fn verify_edge_valid(&self, edge_idx: IndexType) {
+  fn verify_edge_valid(
+    &self,
+    edge_idx: IndexType,
+    first_vertex_idx: IndexType,
+    second_vertex_idx: IndexType,
+  ) {
     if cfg!(debug_assertions) {
       let [left, right] = self.get_endpoints(edge_idx);
       if edge_idx == 25 {
@@ -111,6 +116,8 @@ impl HalfEdge {
         dbg!(right);
       }
       debug_assert_ne!(left, right);
+      debug_assert!(left == first_vertex_idx || left == second_vertex_idx);
+      debug_assert!(right == first_vertex_idx || right == second_vertex_idx);
       self.verify_vertex_valid(left);
       self.verify_vertex_valid(right);
     }
@@ -318,7 +325,8 @@ impl DataStructure for HalfEdge {
     HalfEdge::get_at(key + 1, &self.face_refs)
   }
 
-  fn flip_edge(&mut self, key: IndexType) {
+  fn flip_edge(&mut self, key: IndexType) -> Option<()> {
+    // TODO: error case:
     // see page 24 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d reference
 
@@ -397,6 +405,8 @@ impl DataStructure for HalfEdge {
       self.verify_vertex_valid(b_vertex_idx);
       self.verify_vertex_valid(c_vertex_idx);
       self.verify_vertex_valid(d_vertex_idx);
+
+      Some(())
     } else {
       // later consider making this do nothing
       panic!("AHHHH boundary");
@@ -631,7 +641,7 @@ impl DataStructure for HalfEdge {
   fn collapse_edge(
     &mut self,
     key: IndexType,
-  ) -> ([IndexType; 3], [IndexType; 4]) {
+  ) -> Option<([IndexType; 3], [IndexType; 4])> {
     // see page 28 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d,m reference
 
@@ -662,6 +672,17 @@ impl DataStructure for HalfEdge {
       let a_vertex_idx = self.relative_get(a_c_idx, Offset::Current).vertex_idx;
       let b_vertex_idx = self.relative_get(b_d_idx, Offset::Current).vertex_idx;
 
+      // TODO: why
+      if b_vertex_idx == a_vertex_idx
+        || a_vertex_idx == c_vertex_idx
+        || b_vertex_idx == c_vertex_idx
+        || a_vertex_idx == d_vertex_idx
+        || b_vertex_idx == d_vertex_idx
+        || c_vertex_idx == d_vertex_idx
+      {
+        return None;
+      }
+
       debug_assert_ne!(a_vertex_idx, c_vertex_idx);
       debug_assert_ne!(b_vertex_idx, c_vertex_idx);
       debug_assert_ne!(d_vertex_idx, c_vertex_idx);
@@ -669,24 +690,26 @@ impl DataStructure for HalfEdge {
       debug_assert_ne!(b_vertex_idx, d_vertex_idx);
       debug_assert_ne!(a_vertex_idx, b_vertex_idx);
 
-      if cfg!(debug_assertions) {
-        let mut c_neighbors = Vec::new();
-        self.get_vertex_neighbors(c_vertex_idx, &mut c_neighbors);
-        let mut d_neighbors = Vec::new();
-        self.get_vertex_neighbors(d_vertex_idx, &mut d_neighbors);
+      // TODO: this is garbage tier perf...
+      let mut c_neighbors = Vec::new();
+      self.get_vertex_neighbors(c_vertex_idx, &mut c_neighbors);
+      let mut d_neighbors = Vec::new();
+      self.get_vertex_neighbors(d_vertex_idx, &mut d_neighbors);
 
-        let first_set = HashSet::<u32>::from_iter(c_neighbors.into_iter());
-        let second_set = HashSet::<u32>::from_iter(d_neighbors.into_iter());
+      let first_set = HashSet::<u32>::from_iter(c_neighbors.into_iter());
+      let second_set = HashSet::<u32>::from_iter(d_neighbors.into_iter());
 
-        for vertex_idx in first_set.intersection(&second_set) {
-          assert!(self.degree(*vertex_idx) > 3);
+      for vertex_idx in first_set.intersection(&second_set) {
+        if self.degree(*vertex_idx) <= 3 {
+          return None;
         }
       }
 
       let m_vertex_idx = d_vertex_idx;
 
       {
-        let (_, half_edge_idx) = self.get_start_iter_half_edge_idx(c_vertex_idx);
+        let (_, half_edge_idx) =
+          self.get_start_iter_half_edge_idx(c_vertex_idx);
 
         let mut half_edge_idx_in =
           self.relative_get(half_edge_idx, Offset::Next).next_idx;
@@ -767,7 +790,7 @@ impl DataStructure for HalfEdge {
 
       // TODO: consider rename
       let mut combine_twins = |first, second, edge_idx, vertex_idx| {
-        // TODO: fix vertex behavior in boundary case
+        // TODO: fix vertex and edge behavior in boundary case
         if let Some(c_a_idx) =
           self.relative_get(first, Offset::Current).twin_idx
         {
@@ -775,6 +798,11 @@ impl DataStructure for HalfEdge {
             self.relative_get(second, Offset::Current).twin_idx
           {
             self.vertex_refs[vertex_idx as usize]
+              .as_mut()
+              .unwrap()
+              .half_edge_idx = a_d_idx;
+
+            self.edge_refs[edge_idx as usize]
               .as_mut()
               .unwrap()
               .half_edge_idx = a_d_idx;
@@ -803,13 +831,15 @@ impl DataStructure for HalfEdge {
       combine_twins(b_d_idx, c_b_idx, b_m_edge_idx, b_vertex_idx);
 
       self.verify_vertex_valid(m_vertex_idx);
-      self.verify_edge_valid(m_a_edge_idx);
-      self.verify_edge_valid(b_m_edge_idx);
+      self.verify_vertex_valid(a_vertex_idx);
+      self.verify_vertex_valid(b_vertex_idx);
+      self.verify_edge_valid(m_a_edge_idx, m_vertex_idx, a_vertex_idx);
+      self.verify_edge_valid(b_m_edge_idx, m_vertex_idx, b_vertex_idx);
 
-      (
+      Some((
         [m_vertex_idx, a_vertex_idx, b_vertex_idx],
         [m_a_edge_idx, b_m_edge_idx, c_a_edge_idx, b_c_edge_idx],
-      )
+      ))
     } else {
       panic!("AHHHH boundary");
     }
