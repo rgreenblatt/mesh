@@ -2,9 +2,11 @@ use std::fs::File;
 use std::io::{prelude::*, BufWriter};
 use std::path::Path;
 
-use nalgebra::base::Vector3;
+use crate::get_normal;
 
-pub type Vertex = Vector3<f32>;
+use nalgebra;
+
+pub type Vector3 = nalgebra::base::Vector3<f32>;
 pub type Face = [u32; 3];
 pub type IndexType = u32;
 
@@ -14,7 +16,7 @@ pub trait DataStructure: Sized {
     faces: IterFace,
   ) -> Self
   where
-    IterVert: IntoIterator<Item = Vertex>,
+    IterVert: IntoIterator<Item = Vector3>,
     IterFace: IntoIterator<Item = Face>;
 
   fn from_obj(path: &Path) -> Result<Self, tobj::LoadError> {
@@ -85,9 +87,9 @@ pub trait DataStructure: Sized {
     key: IndexType,
   ) -> Option<([IndexType; 3], [IndexType; 4])>;
 
-  fn set_position(&mut self, key: IndexType, position: &Vertex);
+  fn set_position(&mut self, key: IndexType, position: &Vector3);
 
-  fn get_position(&self, key: IndexType) -> Vertex;
+  fn get_position(&self, key: IndexType) -> Vector3;
 
   fn degree(&self, vertex_idx: IndexType) -> usize;
 
@@ -112,6 +114,36 @@ pub trait DataStructure: Sized {
   ) -> ([IndexType; 3], Option<IndexType>);
 
   fn get_face_neighbors(&self, key: IndexType) -> [IndexType; 3];
+
+  // normal and positions of each vertex
+  fn get_face_normal(&self, face_idx: IndexType) -> (Vector3, [Vector3; 3]) {
+    let [v_0, v_1, v_2] = self.get_face_neighbors(face_idx);
+
+    let p_0 = self.get_position(v_0);
+    let p_1 = self.get_position(v_1);
+    let p_2 = self.get_position(v_2);
+
+    let arr = [p_0, p_1, p_2];
+
+    let normal = get_normal(arr);
+
+    (normal, arr)
+  }
+
+  // normal and positions of the each vertex
+  fn get_vertex_normal(
+    &self,
+    vertex_idx: IndexType,
+    vertex_adjacent_faces: &mut Vec<IndexType>,
+  ) -> Vector3 {
+    self.get_vertex_adjacent_faces(vertex_idx, vertex_adjacent_faces);
+
+    vertex_adjacent_faces
+      .iter()
+      .fold(Vector3::zeros(), |acc, face_idx| {
+        acc + self.get_face_normal(*face_idx).0
+      }).normalize()
+  }
 
   fn get_endpoints(&self, key: IndexType) -> [IndexType; 2];
 
@@ -139,5 +171,5 @@ pub trait DataStructure: Sized {
     Ok(())
   }
 
-  fn to_vecs(self) -> (Vec<Vertex>, Vec<Face>);
+  fn to_vecs(self) -> (Vec<Vector3>, Vec<Face>);
 }

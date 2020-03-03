@@ -1,6 +1,6 @@
 use crate::mesh_operation::Operation;
 use crate::DataStructure;
-use crate::Vertex;
+use crate::Vector3;
 use clap::Clap;
 
 #[derive(Clap)]
@@ -48,7 +48,7 @@ impl Operation for Subdivide {
         };
 
         let avg =
-          neighbors.iter().fold(Vertex::new(0.0, 0.0, 0.0), |acc, x| {
+          neighbors.iter().fold(Vector3::new(0.0, 0.0, 0.0), |acc, x| {
             debug_assert!(*x != vertex);
 
             acc + mesh.get_position(*x)
@@ -57,7 +57,7 @@ impl Operation for Subdivide {
         let pos = avg
           + mesh
             .get_position(vertex)
-            .component_mul(&Vertex::from_element(1.0 - n * u));
+            .component_mul(&Vector3::from_element(1.0 - n * u));
 
         mesh.set_position(vertex, &pos);
 

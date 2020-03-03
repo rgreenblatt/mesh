@@ -3,6 +3,7 @@ use std::path::Path;
 
 use mesh::DataStructure;
 use mesh::Denoise;
+use mesh::Noise;
 use mesh::HalfEdge;
 use mesh::Operation;
 use mesh::Remesh;
@@ -33,6 +34,8 @@ enum Methods {
   Remesh(Remesh),
   #[clap(name = "denoise")]
   Denoise(Denoise),
+  #[clap(name = "noise")]
+  Noise(Noise),
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Methods::Simplify(v) => v.apply(&mut mesh),
     Methods::Remesh(v) => v.apply(&mut mesh),
     Methods::Denoise(v) => v.apply(&mut mesh),
+    Methods::Noise(v) => v.apply(&mut mesh),
   };
 
   mesh.save_obj(&Path::new(&opts.outfile))?;

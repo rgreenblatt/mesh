@@ -1,6 +1,6 @@
 use crate::data_structure::base::Face;
 use crate::data_structure::base::IndexType;
-use crate::data_structure::base::Vertex;
+use crate::data_structure::base::Vector3;
 use crate::data_structure::DataStructure;
 
 use std::collections::{HashMap, HashSet};
@@ -18,7 +18,7 @@ struct HalfEdgeRef {
 #[derive(Clone)]
 struct VertexRef {
   half_edge_idx: IndexType,
-  vertex: Vertex,
+  vertex: Vector3,
 }
 
 struct EdgeRef {
@@ -177,10 +177,10 @@ impl HalfEdge {
 impl DataStructure for HalfEdge {
   fn from_iters<IterVert, IterFace>(vertices: IterVert, faces: IterFace) -> Self
   where
-    IterVert: IntoIterator<Item = Vertex>,
+    IterVert: IntoIterator<Item = Vector3>,
     IterFace: IntoIterator<Item = Face>,
   {
-    let vertices_vec: Vec<Vertex> = vertices.into_iter().collect();
+    let vertices_vec: Vec<Vector3> = vertices.into_iter().collect();
 
     let mut vertex_orig_idx_to_vertex_new_idx = HashMap::new();
     let mut vertex_pair_to_half_edge_idx = HashMap::new();
@@ -845,11 +845,11 @@ impl DataStructure for HalfEdge {
     }
   }
 
-  fn set_position(&mut self, key: IndexType, position: &Vertex) {
+  fn set_position(&mut self, key: IndexType, position: &Vector3) {
     self.vertex_refs[key as usize].as_mut().unwrap().vertex = *position;
   }
 
-  fn get_position(&self, key: IndexType) -> Vertex {
+  fn get_position(&self, key: IndexType) -> Vector3 {
     self.vertex_refs[key as usize].as_ref().unwrap().vertex
   }
 
@@ -985,7 +985,7 @@ impl DataStructure for HalfEdge {
     self.get_face_ref_neighbors(self.face_refs[key as usize].as_ref().unwrap())
   }
 
-  fn to_vecs(self) -> (Vec<Vertex>, Vec<Face>) {
+  fn to_vecs(self) -> (Vec<Vector3>, Vec<Face>) {
     // TODO: GROSS
     let mut exclusive_sum = Vec::with_capacity(self.vertex_refs.len());
 

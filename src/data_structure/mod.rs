@@ -1,6 +1,6 @@
 mod base;
 pub use base::DataStructure;
-pub use base::Vertex;
+pub use base::Vector3;
 pub use base::IndexType;
 
 mod half_edge;

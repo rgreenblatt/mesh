@@ -11,3 +11,5 @@ clap = { git = "https://github.com/clap-rs/clap" }
 tobj = "0.1"
 nalgebra = "0.19"
 ordered-float = "1.0"
+rand_distr = "0.2"
+rand = "0.7"

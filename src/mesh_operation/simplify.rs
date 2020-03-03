@@ -1,7 +1,8 @@
 use crate::mesh_operation::Operation;
 use crate::DataStructure;
 use crate::IndexType;
-use crate::Vertex;
+use crate::Vector3;
+use crate::get_normal;
 
 use clap::Clap;
 use nalgebra::base::{dimension::U1, Matrix4, Vector4};
@@ -32,9 +33,12 @@ fn get_quadric<D: DataStructure>(
   let p_1 = mesh.get_position(v_1);
   let p_2 = mesh.get_position(v_2);
 
-  let normal = ((p_1 - p_0).cross(&(p_2 - p_0))).normalize();
+  let normal = get_normal([p_0, p_1, p_2]);
 
   let d = -p_0.dot(&normal);
+
+  debug_assert!((d - (-p_1.dot(&normal))) < 1e-4);
+  debug_assert!((d - (-p_2.dot(&normal))) < 1e-4);
 
   let v = Vector4::new(normal[0], normal[1], normal[2], d);
 
@@ -47,7 +51,7 @@ fn get_best_position_cost<D: DataStructure>(
   vertex_second: IndexType,
   quadric_first: &Matrix4<f32>,
   quadric_second: &Matrix4<f32>,
-) -> (Vertex, NotNan<f32>) {
+) -> (Vector3, NotNan<f32>) {
   let mut combined_quadric = quadric_first + quadric_second;
 
   combined_quadric.row_mut(3)[0] = 0.0;
