@@ -862,14 +862,12 @@ impl DataStructure for HalfEdge {
     neighbors.len()
   }
 
-  fn get_vertex_neighbors(
+  fn get_vertex_neighbors_append(
     &self,
     key: IndexType,
     neighbors: &mut Vec<IndexType>,
   ) -> bool {
     let (has_boundary, half_edge_idx) = self.get_start_iter_half_edge_idx(key);
-
-    neighbors.clear();
 
     let mut half_edge_idx_in =
       self.relative_get(half_edge_idx, Offset::Next).next_idx;

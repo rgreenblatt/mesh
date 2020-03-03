@@ -99,6 +99,17 @@ pub trait DataStructure: Sized {
     &self,
     key: IndexType,
     neighbors: &mut Vec<IndexType>,
+  ) -> bool {
+    neighbors.clear();
+
+    self.get_vertex_neighbors_append(key, neighbors)
+  }
+
+  // same as get vertex neighbors, but appends to vec instead of clearing
+  fn get_vertex_neighbors_append(
+    &self,
+    key: IndexType,
+    neighbors: &mut Vec<IndexType>,
   ) -> bool;
 
   fn get_vertex_adjacent_faces(
