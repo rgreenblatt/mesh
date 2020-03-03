@@ -172,6 +172,42 @@ impl HalfEdge {
 
     (has_boundary, half_edge_idx)
   }
+
+  fn check_all(&self) {
+    if cfg!(debug_assertions) {
+      let vertex_iter = self
+        .vertex_refs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
+
+      for (vertex_idx, _) in vertex_iter {
+        self.verify_vertex_valid(vertex_idx.try_into().unwrap());
+      }
+      
+      let edge_iter = self
+        .edge_refs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
+
+      for (edge_idx, _) in edge_iter {
+        let edge_iter = edge_idx.try_into().unwrap();
+        let [l, r] = self.get_endpoints(edge_iter);
+        self.verify_edge_valid(edge_iter, l, r);
+      }
+      
+      // let face_iter = self
+      //   .face_refs
+      //   .iter()
+      //   .enumerate()
+      //   .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
+
+      // for (face_idx, _) in face_iter {
+      //   self.verify_face_valid(face_idx.try_into().unwrap());
+      // }
+    }
+  }
 }
 
 impl DataStructure for HalfEdge {
@@ -984,6 +1020,8 @@ impl DataStructure for HalfEdge {
   }
 
   fn to_vecs(self) -> (Vec<Vector3>, Vec<Face>) {
+    self.check_all();
+
     // TODO: GROSS
     let mut exclusive_sum = Vec::with_capacity(self.vertex_refs.len());
 
