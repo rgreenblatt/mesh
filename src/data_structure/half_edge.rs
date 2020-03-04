@@ -48,8 +48,6 @@ enum Offset {
 }
 
 impl HalfEdge {
-  fn collapse(&mut self) {}
-
   fn get_next(&self, half_edge: &HalfEdgeRef) -> &HalfEdgeRef {
     &self.half_edge_refs[half_edge.next_idx as usize]
   }
@@ -833,21 +831,18 @@ impl DataStructure for HalfEdge {
       self.get_vertex_neighbors(d_vertex_idx, &mut store);
       let d_neighbors = HashSet::<IndexType>::from_iter(store);
 
-      let mut size = 0;
+      let mut num_common = 0;
 
       for vertex_idx in c_neighbors.intersection(&d_neighbors) {
-        size += 1;
+        num_common += 1;
         if self.degree(*vertex_idx) <= 3 {
-          panic!(dbg!("DEGREE <= 3"));
           return None;
         }
       }
 
-      // TODO:
-      if size > 2 {
+      if num_common > 2 {
         return None;
       }
-
 
       let m_vertex_idx = d_vertex_idx;
 
@@ -970,7 +965,7 @@ impl DataStructure for HalfEdge {
 
       self.num_removed_vertices += 1;
 
-      // TODO
+      // TODO (boundary)
       let m_b_idx = self.relative_get(b_d_idx, Offset::Current).twin_idx;
 
       assert!(m_b_idx.is_some());
@@ -1113,8 +1108,8 @@ impl DataStructure for HalfEdge {
     // iterate from one side in other direction
     while first || half_edge_idx_in != half_edge_idx_orig_in {
       debug_assert!(!self.removed_half_edges.contains(&half_edge_idx_in));
-      debug_assert!(!self.removed_half_edges.contains(&
-        self
+      debug_assert!(!self.removed_half_edges.contains(
+        &self
           .relative_get(half_edge_idx_in, Offset::Current)
           .next_idx
       ));

@@ -65,7 +65,6 @@ fn get_best_position_cost<D: DataStructure>(
     .try_inverse()
     .map(|v| (v * Vector4::new(0.0, 0.0, 0.0, 1.0)).remove_fixed_rows::<U1>(3))
     .unwrap_or_else(|| {
-      dbg!("Not invertible!");
       0.5 * (mesh.get_position(vertex_first) + mesh.get_position(vertex_second))
     });
 
