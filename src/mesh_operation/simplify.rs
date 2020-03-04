@@ -9,7 +9,8 @@ use nalgebra::base::{dimension::U1, Matrix4, Vector4};
 use ordered_float::NotNan;
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashSet};
+use std::iter::FromIterator;
 
 #[derive(Clap)]
 pub struct Simplify {
@@ -52,14 +53,15 @@ fn get_best_position_cost<D: DataStructure>(
   quadric_first: &Matrix4<f32>,
   quadric_second: &Matrix4<f32>,
 ) -> (Vector3, NotNan<f32>) {
-  let mut combined_quadric = quadric_first + quadric_second;
+  let combined_quadric = quadric_first + quadric_second;
+  let mut partials_quadric = combined_quadric;
 
-  combined_quadric.row_mut(3)[0] = 0.0;
-  combined_quadric.row_mut(3)[1] = 0.0;
-  combined_quadric.row_mut(3)[2] = 0.0;
-  combined_quadric.row_mut(3)[3] = 1.0;
+  partials_quadric.row_mut(3)[0] = 0.0;
+  partials_quadric.row_mut(3)[1] = 0.0;
+  partials_quadric.row_mut(3)[2] = 0.0;
+  partials_quadric.row_mut(3)[3] = 1.0;
 
-  let optimal_position = combined_quadric
+  let optimal_position = partials_quadric
     .try_inverse()
     .map(|v| (v * Vector4::new(0.0, 0.0, 0.0, 1.0)).remove_fixed_rows::<U1>(3))
     .unwrap_or_else(|| {
@@ -85,22 +87,6 @@ fn get_best_position_cost<D: DataStructure>(
     mesh.get_vertex_neighbors(vertex_second, &mut neighbors);
     debug_assert!(neighbors.contains(&vertex_first));
   }
-
-  if cost <= 0.0 {
-    dbg!(optimal_position_4);
-    dbg!(combined_quadric);
-    dbg!(vertex_first);
-    dbg!(vertex_second);
-
-    dbg!(mesh.get_position(vertex_first));
-    dbg!(mesh.get_position(vertex_second));
-
-    dbg!(cost);
-
-    dbg!("oh no!");
-  }
-
-  // debug_assert!(cost > 0.0);
 
   (optimal_position, NotNan::new(cost).unwrap())
 }
@@ -134,15 +120,11 @@ impl Operation for Simplify {
       } else {
         mesh.get_vertex_adjacent_faces(vertex_idx, &mut adjacent_faces);
 
-        let quadric =
-          adjacent_faces
-            .iter()
-            .fold(Matrix4::zeros(), |acc, face_idx| {
-              if vertex_idx == 869 || vertex_idx == 946 {
-                dbg!(face_idx);
-              }
-              acc + get_face_quadric(*face_idx)
-            });
+        let quadric = adjacent_faces
+          .iter()
+          .fold(Matrix4::zeros(), |acc, face_idx| {
+            acc + get_face_quadric(*face_idx)
+          });
 
         vertex_quadrics[vertex_idx as usize] = Some(quadric);
 
@@ -197,9 +179,7 @@ impl Operation for Simplify {
       }
 
       let EdgeCost {
-        edge_idx,
-        count,
-        cost,
+        edge_idx, count, ..
       } = op.unwrap();
 
       // TODO: when will this occur
@@ -214,15 +194,23 @@ impl Operation for Simplify {
         continue;
       }
 
-      assert_eq!(true_count, count);
+      debug_assert_eq!(true_count, count);
 
-      if cfg!(debug_assertion) {
-        let [l, r] = mesh.get_endpoints(edge_idx);
-      }
+      debug_assert_ne!(first_vertex_idx, second_vertex_idx);
+      debug_assert_eq!(
+        HashSet::<u32>::from_iter(
+          [first_vertex_idx, second_vertex_idx].iter().cloned()
+        ),
+        HashSet::<u32>::from_iter(mesh.get_endpoints(edge_idx).iter().cloned())
+      );
 
       if let Some(new_vertex) =
         mesh.collapse_edge(edge_idx, &mut modified_edges, &mut removed_edges)
       {
+        debug_assert!(
+          (new_vertex == first_vertex_idx) ^ (new_vertex == second_vertex_idx)
+        );
+
         mesh.set_position(new_vertex, &best_position);
 
         for removed_edge in &removed_edges {
@@ -238,32 +226,30 @@ impl Operation for Simplify {
         for (edge_idx, vertex_idx) in &modified_edges {
           let vertex_idx = *vertex_idx;
           let edge_idx = *edge_idx;
-          // let (best_position, cost) = get_best_position_cost(
-          //   mesh,
-          //   new_vertex,
-          //   vertex_idx, // verify order unimportant
-          //   &new_vertex_quadric,
-          //   &vertex_quadrics[vertex_idx as usize].unwrap(),
-          // );
+          let (best_position, cost) = get_best_position_cost(
+            mesh,
+            new_vertex,
+            vertex_idx, // verify order unimportant
+            &new_vertex_quadric,
+            &vertex_quadrics[vertex_idx as usize].unwrap(),
+          );
 
-          // let mut old_count = 0;
+          let mut old_count = 0;
 
-          // if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
-          //   old_count = count;
-          // }
+          if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
+            old_count = count;
+          }
 
-          // let count = old_count + 1;
+          let count = old_count + 1;
 
-          // edge_info[edge_idx as usize] =
-          //   Some((best_position, new_vertex, vertex_idx, count));
+          edge_info[edge_idx as usize] =
+            Some((best_position, new_vertex, vertex_idx, count));
 
-          // edge_heap.push(EdgeCost {
-          //   edge_idx,
-          //   cost: Reverse(cost),
-          //   count,
-          // });
-          
-          edge_info[edge_idx as usize] = None;
+          edge_heap.push(EdgeCost {
+            edge_idx,
+            cost: Reverse(cost),
+            count,
+          });
         }
       }
     }
