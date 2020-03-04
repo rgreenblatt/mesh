@@ -1,8 +1,8 @@
+use crate::get_normal;
 use crate::mesh_operation::Operation;
 use crate::DataStructure;
 use crate::IndexType;
 use crate::Vector3;
-use crate::get_normal;
 
 use clap::Clap;
 use nalgebra::base::{dimension::U1, Matrix4, Vector4};
@@ -20,7 +20,7 @@ pub struct Simplify {
 struct EdgeCost {
   cost: Reverse<NotNan<f32>>,
   edge_idx: IndexType,
-  count: u8,
+  count: u32,
 }
 
 fn get_quadric<D: DataStructure>(
@@ -96,7 +96,7 @@ fn get_best_position_cost<D: DataStructure>(
     dbg!(mesh.get_position(vertex_second));
 
     dbg!(cost);
-    
+
     dbg!("oh no!");
   }
 
@@ -153,6 +153,9 @@ impl Operation for Simplify {
     let mut edge_heap = BinaryHeap::new();
     let mut edge_info = Vec::new();
 
+    let mut removed_edges = Vec::new();
+    let mut modified_edges = Vec::new();
+
     edge_info.resize(mesh.max_idx_edges(), None);
 
     while let Some(edge_idx) = edge_op {
@@ -180,19 +183,24 @@ impl Operation for Simplify {
       edge_op = mesh.next_edge(edge_idx);
     }
 
-    let initial_num_faces = dbg!(mesh.num_faces());
-    dbg!(self.faces_to_remove);
+    let initial_num_faces = mesh.num_faces();
 
-    assert!((self.faces_to_remove as usize) < initial_num_faces);
+    let final_num_faces =
+      initial_num_faces.saturating_sub(self.faces_to_remove as usize);
 
-    let final_num_faces = initial_num_faces - self.faces_to_remove as usize;
+    while mesh.num_faces() > final_num_faces {
+      let op = edge_heap.pop();
 
-    while mesh.num_faces() >= final_num_faces {
+      if op.is_none() {
+        eprintln!("couldn't remove requested number of faces (queue empty)");
+        return;
+      }
+
       let EdgeCost {
         edge_idx,
         count,
         cost,
-      } = edge_heap.pop().expect("Heap shouldn't be empty");
+      } = op.unwrap();
 
       // TODO: when will this occur
       if edge_info[edge_idx as usize].is_none() {
@@ -208,24 +216,18 @@ impl Operation for Simplify {
 
       assert_eq!(true_count, count);
 
-      dbg!(edge_idx);
-      dbg!(count);
-      dbg!(cost);
+      if cfg!(debug_assertion) {
+        let [l, r] = mesh.get_endpoints(edge_idx);
+      }
 
-      if let Some((
-        [new_vertex, edge_0_vertex, edge_1_vertex],
-        [update_edge_0, update_edge_1, invalid_edge_0, invalid_edge_1],
-      )) = mesh.collapse_edge(edge_idx)
+      if let Some(new_vertex) =
+        mesh.collapse_edge(edge_idx, &mut modified_edges, &mut removed_edges)
       {
-        dbg!(update_edge_0);
-        dbg!(update_edge_1);
-        dbg!(invalid_edge_0);
-        dbg!(invalid_edge_1);
-
         mesh.set_position(new_vertex, &best_position);
 
-        edge_info[invalid_edge_0 as usize] = None;
-        edge_info[invalid_edge_1 as usize] = None;
+        for removed_edge in &removed_edges {
+          edge_info[*removed_edge as usize] = None;
+        }
 
         let new_vertex_quadric = vertex_quadrics[first_vertex_idx as usize]
           .unwrap()
@@ -233,35 +235,36 @@ impl Operation for Simplify {
 
         vertex_quadrics[new_vertex as usize] = Some(new_vertex_quadric);
 
-        let mut update = |vertex_idx, edge_idx| {
-          let (best_position, cost) = get_best_position_cost(
-            mesh,
-            new_vertex,
-            vertex_idx, // verify order unimportant
-            &new_vertex_quadric,
-            &vertex_quadrics[vertex_idx as usize].unwrap(),
-          );
+        for (edge_idx, vertex_idx) in &modified_edges {
+          let vertex_idx = *vertex_idx;
+          let edge_idx = *edge_idx;
+          // let (best_position, cost) = get_best_position_cost(
+          //   mesh,
+          //   new_vertex,
+          //   vertex_idx, // verify order unimportant
+          //   &new_vertex_quadric,
+          //   &vertex_quadrics[vertex_idx as usize].unwrap(),
+          // );
 
-          let mut old_count = 0;
+          // let mut old_count = 0;
 
-          if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
-            old_count = count;
-          }
+          // if let Some((_, _, _, count)) = edge_info[edge_idx as usize] {
+          //   old_count = count;
+          // }
 
-          let count = old_count + 1;
+          // let count = old_count + 1;
 
-          edge_info[edge_idx as usize] =
-            Some((best_position, new_vertex, vertex_idx, count));
+          // edge_info[edge_idx as usize] =
+          //   Some((best_position, new_vertex, vertex_idx, count));
 
-          edge_heap.push(EdgeCost {
-            edge_idx,
-            cost: Reverse(cost),
-            count,
-          });
-        };
-
-        update(edge_0_vertex, update_edge_0);
-        update(edge_1_vertex, update_edge_1);
+          // edge_heap.push(EdgeCost {
+          //   edge_idx,
+          //   cost: Reverse(cost),
+          //   count,
+          // });
+          
+          edge_info[edge_idx as usize] = None;
+        }
       }
     }
   }

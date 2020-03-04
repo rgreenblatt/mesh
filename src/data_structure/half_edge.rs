@@ -38,6 +38,7 @@ pub struct HalfEdge {
   num_removed_vertices: usize,
   num_removed_edges: usize,
   num_removed_faces: usize,
+  removed_half_edges: HashSet<u32>, // only used for debugging
 }
 
 enum Offset {
@@ -69,6 +70,9 @@ impl HalfEdge {
   fn verify_half_edge_valid(&self, half_edge_idx: IndexType) {
     if cfg!(debug_assertions) {
       let half_edge = &self.half_edge_refs[half_edge_idx as usize];
+      debug_assert!(self.vertex_refs[half_edge.vertex_idx as usize].is_some());
+      debug_assert!(self.edge_refs[half_edge.edge_idx as usize].is_some());
+      debug_assert!(self.face_refs[half_edge.face_idx as usize].is_some());
       debug_assert_eq!(
         self.relative_get(half_edge_idx, Offset::Next).vertex_idx,
         self.half_edge_refs[half_edge.twin_idx.unwrap() as usize].vertex_idx
@@ -81,13 +85,22 @@ impl HalfEdge {
     }
   }
 
-  fn verify_vertex_valid(&self, vertex: IndexType) {
+  fn verify_vertex_valid(&self, vertex_idx: IndexType) {
     if cfg!(debug_assertions) {
+      debug_assert_eq!(
+        vertex_idx,
+        self.half_edge_refs[self.vertex_refs[vertex_idx as usize]
+          .as_ref()
+          .unwrap()
+          .half_edge_idx as usize]
+          .vertex_idx
+      );
+
       let mut neighbors = Vec::new();
-      self.get_vertex_neighbors(vertex, &mut neighbors);
-      debug_assert!(!neighbors.contains(&vertex));
+      self.get_vertex_neighbors(vertex_idx, &mut neighbors);
+      debug_assert!(!neighbors.contains(&vertex_idx));
       self.verify_half_edge_valid(
-        self.vertex_refs[vertex as usize]
+        self.vertex_refs[vertex_idx as usize]
           .as_ref()
           .unwrap()
           .half_edge_idx,
@@ -111,15 +124,67 @@ impl HalfEdge {
   ) {
     if cfg!(debug_assertions) {
       let [left, right] = self.get_endpoints(edge_idx);
-      if edge_idx == 25 {
-        dbg!(left);
-        dbg!(right);
-      }
-      debug_assert_ne!(left, right);
-      debug_assert!(left == first_vertex_idx || left == second_vertex_idx);
-      debug_assert!(right == first_vertex_idx || right == second_vertex_idx);
+
+      let vertex_hash_set =
+        HashSet::<IndexType>::from_iter([left, right].iter().cloned());
+
+      debug_assert_eq!(vertex_hash_set.len(), 2);
+      debug_assert_eq!(
+        vertex_hash_set,
+        HashSet::<IndexType>::from_iter(
+          [first_vertex_idx, second_vertex_idx].iter().cloned()
+        )
+      );
+
+      debug_assert_eq!(
+        edge_idx,
+        self.half_edge_refs[self.edge_refs[edge_idx as usize]
+          .as_ref()
+          .unwrap()
+          .half_edge_idx as usize]
+          .edge_idx
+      );
+
       self.verify_vertex_valid(left);
       self.verify_vertex_valid(right);
+    }
+  }
+
+  fn verify_face_valid(
+    &self,
+    face_idx: IndexType,
+    first_vertex_idx: IndexType,
+    second_vertex_idx: IndexType,
+    third_vertex_idx: IndexType,
+  ) {
+    if cfg!(debug_assertions) {
+      let [first, second, third] = self.get_face_neighbors(face_idx);
+
+      let vertex_hash_set =
+        HashSet::<IndexType>::from_iter([first, second, third].iter().cloned());
+
+      debug_assert_eq!(vertex_hash_set.len(), 3);
+      debug_assert_eq!(
+        vertex_hash_set,
+        HashSet::<IndexType>::from_iter(
+          vec![first_vertex_idx, second_vertex_idx, third_vertex_idx]
+            .iter()
+            .cloned()
+        )
+      );
+
+      debug_assert_eq!(
+        face_idx,
+        self.half_edge_refs[self.face_refs[face_idx as usize]
+          .as_ref()
+          .unwrap()
+          .half_edge_idx as usize]
+          .face_idx
+      );
+
+      self.verify_vertex_valid(first);
+      self.verify_vertex_valid(second);
+      self.verify_vertex_valid(third);
     }
   }
 
@@ -184,7 +249,9 @@ impl HalfEdge {
       for (vertex_idx, _) in vertex_iter {
         self.verify_vertex_valid(vertex_idx.try_into().unwrap());
       }
-      
+
+      let mut edge_hash_set = HashSet::new();
+
       let edge_iter = self
         .edge_refs
         .iter()
@@ -192,20 +259,53 @@ impl HalfEdge {
         .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
 
       for (edge_idx, _) in edge_iter {
-        let edge_iter = edge_idx.try_into().unwrap();
-        let [l, r] = self.get_endpoints(edge_iter);
-        self.verify_edge_valid(edge_iter, l, r);
-      }
-      
-      // let face_iter = self
-      //   .face_refs
-      //   .iter()
-      //   .enumerate()
-      //   .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
+        let edge_idx = edge_idx.try_into().unwrap();
+        let [l, r] = self.get_endpoints(edge_idx);
 
-      // for (face_idx, _) in face_iter {
-      //   self.verify_face_valid(face_idx.try_into().unwrap());
-      // }
+        debug_assert!(!edge_hash_set.contains(&(l, r)));
+        debug_assert!(!edge_hash_set.contains(&(r, l)));
+        edge_hash_set.insert((l, r));
+        debug_assert!(edge_hash_set.contains(&(l, r)));
+
+        self.verify_edge_valid(edge_idx, l, r);
+      }
+
+      let face_iter = self
+        .face_refs
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| x.as_ref().map(|x| (i, x)));
+
+      for (face_idx, _) in face_iter {
+        let face_idx = face_idx.try_into().unwrap();
+        let [v_0, v_1, v_2] = self.get_face_neighbors(face_idx);
+
+        let check_edge_exists = |v_l, v_r| {
+          debug_assert!(
+            edge_hash_set.contains(&(v_l, v_r))
+              ^ edge_hash_set.contains(&(v_r, v_l))
+          );
+        };
+
+        check_edge_exists(v_0, v_1);
+        check_edge_exists(v_0, v_2);
+        check_edge_exists(v_1, v_2);
+
+        self.verify_face_valid(face_idx, v_0, v_1, v_2);
+      }
+
+      let half_edge_iter =
+        self.half_edge_refs.iter().enumerate().filter_map(|(i, x)| {
+          if self.removed_half_edges.contains(&(i.try_into().unwrap())) {
+            None
+          } else {
+            Some((i, x))
+          }
+        });
+
+      for (half_edge_idx, _) in half_edge_iter {
+        self.verify_half_edge_valid(half_edge_idx.try_into().unwrap());
+      }
     }
   }
 }
@@ -289,9 +389,6 @@ impl DataStructure for HalfEdge {
       }));
     }
 
-    let vertex_length = vertex_refs.len() as IndexType;
-    let half_edge_length = half_edge_refs.len() as IndexType;
-
     let out = HalfEdge {
       half_edge_refs,
       vertex_refs,
@@ -300,15 +397,10 @@ impl DataStructure for HalfEdge {
       num_removed_vertices: 0,
       num_removed_edges: 0,
       num_removed_faces: 0,
+      removed_half_edges: HashSet::new(),
     };
 
-    for idx in 0..vertex_length {
-      out.verify_vertex_valid(idx);
-    }
-
-    for idx in 0..half_edge_length {
-      out.verify_half_edge_valid(idx);
-    }
+    out.check_all();
 
     out
   }
@@ -674,10 +766,17 @@ impl DataStructure for HalfEdge {
     }
   }
 
+  // TODO:
+  #[allow(clippy::cognitive_complexity)]
   fn collapse_edge(
     &mut self,
     key: IndexType,
-  ) -> Option<([IndexType; 3], [IndexType; 4])> {
+    modified_edges: &mut Vec<(IndexType, IndexType)>,
+    removed_edges: &mut Vec<IndexType>,
+  ) -> Option<IndexType> {
+    modified_edges.clear();
+    removed_edges.clear();
+
     // see page 28 of lecture slides "meshes_geoprocessing" for
     // a,b,c,d,m reference
 
@@ -727,21 +826,72 @@ impl DataStructure for HalfEdge {
       debug_assert_ne!(a_vertex_idx, b_vertex_idx);
 
       // TODO: this is garbage tier perf...
-      let mut c_neighbors = Vec::new();
-      self.get_vertex_neighbors(c_vertex_idx, &mut c_neighbors);
-      let mut d_neighbors = Vec::new();
-      self.get_vertex_neighbors(d_vertex_idx, &mut d_neighbors);
+      let mut store = Vec::new();
+      self.get_vertex_neighbors(c_vertex_idx, &mut store);
+      let c_neighbors = HashSet::<IndexType>::from_iter(store);
+      let mut store = Vec::new();
+      self.get_vertex_neighbors(d_vertex_idx, &mut store);
+      let d_neighbors = HashSet::<IndexType>::from_iter(store);
 
-      let first_set = HashSet::<u32>::from_iter(c_neighbors.into_iter());
-      let second_set = HashSet::<u32>::from_iter(d_neighbors.into_iter());
+      let mut size = 0;
 
-      for vertex_idx in first_set.intersection(&second_set) {
+      for vertex_idx in c_neighbors.intersection(&d_neighbors) {
+        size += 1;
         if self.degree(*vertex_idx) <= 3 {
+          panic!(dbg!("DEGREE <= 3"));
           return None;
         }
       }
 
+      // TODO:
+      if size > 2 {
+        return None;
+      }
+
+
       let m_vertex_idx = d_vertex_idx;
+
+      {
+        let (_, half_edge_idx) =
+          self.get_start_iter_half_edge_idx(d_vertex_idx);
+
+        let mut half_edge_idx_in =
+          self.relative_get(half_edge_idx, Offset::Next).next_idx;
+        let half_edge_idx_orig_in = half_edge_idx_in;
+
+        let mut first = true;
+
+        while first || half_edge_idx_in != half_edge_idx_orig_in {
+          let this_edge_idx = self
+            .relative_get(half_edge_idx_in, Offset::Current)
+            .next_idx;
+
+          debug_assert_eq!(
+            self.relative_get(this_edge_idx, Offset::Current).vertex_idx,
+            d_vertex_idx
+          );
+
+          let other_edge_vertex =
+            self.relative_get(this_edge_idx, Offset::Next).vertex_idx;
+
+          let edge = self.relative_get(this_edge_idx, Offset::Current).edge_idx;
+
+          if other_edge_vertex != c_vertex_idx {
+            modified_edges.push((edge, other_edge_vertex));
+          }
+
+          if let Some(new_half_edge_idx_in) =
+            self.relative_get(half_edge_idx_in, Offset::Next).twin_idx
+          {
+            half_edge_idx_in = new_half_edge_idx_in;
+          } else {
+            panic!("boundary!!!");
+            // break;
+          }
+
+          first = false;
+        }
+      }
 
       {
         let (_, half_edge_idx) =
@@ -763,6 +913,35 @@ impl DataStructure for HalfEdge {
             c_vertex_idx
           );
 
+          let other_edge_vertex =
+            self.relative_get(this_edge_idx, Offset::Next).vertex_idx;
+
+          debug_assert!(c_neighbors.contains(&other_edge_vertex));
+
+          let edge = self.relative_get(this_edge_idx, Offset::Current).edge_idx;
+
+          if d_neighbors.contains(&other_edge_vertex)
+            || other_edge_vertex == d_vertex_idx
+          {
+            removed_edges.push(edge);
+            self.edge_refs[edge as usize] = None;
+            if cfg!(debug_assertions)
+              && other_edge_vertex != a_vertex_idx
+              && other_edge_vertex != b_vertex_idx
+            {
+              self.removed_half_edges.insert(this_edge_idx);
+
+              if let Some(twin_idx) =
+                self.relative_get(this_edge_idx, Offset::Current).twin_idx
+              {
+                self.removed_half_edges.insert(twin_idx);
+              }
+            }
+          } else {
+            modified_edges.push((edge, other_edge_vertex));
+          }
+
+          // TODO: move inside else case
           self.half_edge_refs[this_edge_idx as usize].vertex_idx = m_vertex_idx;
 
           if let Some(new_half_edge_idx_in) =
@@ -778,7 +957,14 @@ impl DataStructure for HalfEdge {
         }
       }
 
-      dbg!(c_vertex_idx);
+      if cfg!(debug_assertions) {
+        self.removed_half_edges.insert(d_a_idx);
+        self.removed_half_edges.insert(b_d_idx);
+        self.removed_half_edges.insert(c_d_idx);
+        self.removed_half_edges.insert(a_c_idx);
+        self.removed_half_edges.insert(c_b_idx);
+        self.removed_half_edges.insert(d_c_idx);
+      }
 
       self.vertex_refs[c_vertex_idx as usize] = None;
 
@@ -786,6 +972,8 @@ impl DataStructure for HalfEdge {
 
       // TODO
       let m_b_idx = self.relative_get(b_d_idx, Offset::Current).twin_idx;
+
+      assert!(m_b_idx.is_some());
 
       self.vertex_refs[m_vertex_idx as usize] =
         m_b_idx.map(|half_edge_idx| VertexRef {
@@ -803,13 +991,21 @@ impl DataStructure for HalfEdge {
       let m_a_edge_idx = d_a_edge_idx;
       let b_m_edge_idx = b_d_edge_idx;
 
-      // c<->a removed
-      let c_a_edge_idx = self.relative_get(a_c_idx, Offset::Current).edge_idx;
-      // b<->c removed
-      let b_c_edge_idx = self.relative_get(c_b_idx, Offset::Current).edge_idx;
+      if cfg!(debug_assertions) {
+        // c<->a removed
+        let c_a_edge_idx = self.relative_get(a_c_idx, Offset::Current).edge_idx;
+        // b<->c removed
+        let b_c_edge_idx = self.relative_get(c_b_idx, Offset::Current).edge_idx;
+        // c<->d removed
+        let c_d_edge_idx = self.relative_get(c_d_idx, Offset::Current).edge_idx;
 
-      self.edge_refs[c_a_edge_idx as usize] = None;
-      self.edge_refs[b_c_edge_idx as usize] = None;
+        debug_assert!(self.edge_refs[c_a_edge_idx as usize].is_none());
+        debug_assert!(self.edge_refs[b_c_edge_idx as usize].is_none());
+        debug_assert!(self.edge_refs[c_d_edge_idx as usize].is_none());
+
+        debug_assert!(self.edge_refs[d_a_edge_idx as usize].is_some());
+        debug_assert!(self.edge_refs[b_d_edge_idx as usize].is_some());
+      }
 
       self.num_removed_edges += 2;
 
@@ -859,10 +1055,6 @@ impl DataStructure for HalfEdge {
         }
       };
 
-      dbg!(a_vertex_idx);
-      dbg!(b_vertex_idx);
-      dbg!(m_vertex_idx);
-
       combine_twins(a_c_idx, d_a_idx, m_a_edge_idx, a_vertex_idx);
       combine_twins(b_d_idx, c_b_idx, b_m_edge_idx, b_vertex_idx);
 
@@ -872,10 +1064,11 @@ impl DataStructure for HalfEdge {
       self.verify_edge_valid(m_a_edge_idx, m_vertex_idx, a_vertex_idx);
       self.verify_edge_valid(b_m_edge_idx, m_vertex_idx, b_vertex_idx);
 
-      Some((
-        [m_vertex_idx, a_vertex_idx, b_vertex_idx],
-        [m_a_edge_idx, b_m_edge_idx, c_a_edge_idx, b_c_edge_idx],
-      ))
+      debug_assert!(modified_edges.contains(&(m_a_edge_idx, a_vertex_idx)));
+      debug_assert!(modified_edges.contains(&(b_m_edge_idx, b_vertex_idx)));
+      // TODO: FIX MODIFIED: [m_a_edge_idx, b_m_edge_idx],
+
+      Some(m_vertex_idx)
     } else {
       panic!("AHHHH boundary");
     }
@@ -919,6 +1112,12 @@ impl DataStructure for HalfEdge {
 
     // iterate from one side in other direction
     while first || half_edge_idx_in != half_edge_idx_orig_in {
+      debug_assert!(!self.removed_half_edges.contains(&half_edge_idx_in));
+      debug_assert!(!self.removed_half_edges.contains(&
+        self
+          .relative_get(half_edge_idx_in, Offset::Current)
+          .next_idx
+      ));
       debug_assert_eq!(
         self.relative_get(half_edge_idx_in, Offset::Next).vertex_idx,
         key
