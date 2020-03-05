@@ -1166,7 +1166,7 @@ impl DataStructure for HalfEdge {
     for half_edge_idx in half_edge_iter {
       neighbors.push(self.relative_get(half_edge_idx, Offset::Next).vertex_idx);
     }
-    
+
     has_boundary
   }
 

@@ -86,8 +86,8 @@ pub trait DataStructure: Sized {
     &mut self,
     key: IndexType,
     // edge idx and other vertex
-    modified_edges : &mut Vec<(IndexType, IndexType)>,
-    removed_edges : &mut Vec<IndexType>,
+    modified_edges: &mut Vec<(IndexType, IndexType)>,
+    removed_edges: &mut Vec<IndexType>,
   ) -> Option<IndexType>;
 
   fn set_position(&mut self, key: IndexType, position: &Vector3);
@@ -156,7 +156,8 @@ pub trait DataStructure: Sized {
       .iter()
       .fold(Vector3::zeros(), |acc, face_idx| {
         acc + self.get_face_normal(*face_idx).0
-      }).normalize()
+      })
+      .normalize()
   }
 
   fn get_endpoints(&self, key: IndexType) -> [IndexType; 2];

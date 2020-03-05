@@ -6,8 +6,8 @@ pub use utils::get_normal;
 
 pub use data_structure::DataStructure;
 pub use data_structure::HalfEdge;
-pub use data_structure::Vector3;
 pub use data_structure::IndexType;
+pub use data_structure::Vector3;
 
 pub use mesh_operation::Operation;
 

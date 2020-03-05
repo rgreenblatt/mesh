@@ -48,11 +48,14 @@ impl Operation for Subdivide {
         };
 
         let avg =
-          neighbors.iter().fold(Vector3::new(0.0, 0.0, 0.0), |acc, x| {
-            debug_assert!(*x != vertex);
+          neighbors
+            .iter()
+            .fold(Vector3::new(0.0, 0.0, 0.0), |acc, x| {
+              debug_assert!(*x != vertex);
 
-            acc + mesh.get_position(*x)
-          }) * u;
+              acc + mesh.get_position(*x)
+            })
+            * u;
 
         let pos = avg
           + mesh

@@ -2,8 +2,8 @@ use crate::mesh_operation::Operation;
 use crate::DataStructure;
 
 use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::convert::TryInto;
+use std::iter::FromIterator;
 
 use clap::Clap;
 

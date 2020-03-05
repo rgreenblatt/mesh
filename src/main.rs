@@ -3,8 +3,8 @@ use std::path::Path;
 
 use mesh::DataStructure;
 use mesh::Denoise;
-use mesh::Noise;
 use mesh::HalfEdge;
+use mesh::Noise;
 use mesh::Operation;
 use mesh::Remesh;
 use mesh::Simplify;
