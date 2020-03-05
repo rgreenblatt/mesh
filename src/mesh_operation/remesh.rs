@@ -4,27 +4,40 @@ use crate::Vector3;
 
 use clap::Clap;
 
-// use std::collections::HashSet;
+use std::collections::HashSet;
 
 #[derive(Clap)]
 pub struct Remesh {
   iterations: u32,
   smoothing_weight: f32,
+  #[clap(long = "no-collapse")]
+  no_collapse: bool,
 }
 
 impl Operation for Remesh {
+  #[allow(clippy::cognitive_complexity)]
   fn apply<D: DataStructure>(&self, mesh: &mut D) {
     for _ in 0..self.iterations {
-      let mut edge_op = mesh.initial_edge();
-
       let mut total_edge_len = 0.0;
       let mut num_edges = 0;
 
       let get_edge_len = |mesh: &D, edge_idx| {
         let [l, r] = mesh.get_endpoints(edge_idx);
 
-        (mesh.get_position(l) - mesh.get_position(r)).norm()
+        let val = (mesh.get_position(l) - mesh.get_position(r)).norm();
+
+        if val.is_nan() {
+          dbg!(val);
+          dbg!(mesh.get_position(l));
+          dbg!(mesh.get_position(r));
+        }
+
+        debug_assert!(!val.is_nan());
+
+        val
       };
+
+      let mut edge_op = mesh.initial_edge();
 
       while let Some(edge_idx) = edge_op {
         num_edges += 1;
@@ -36,21 +49,11 @@ impl Operation for Remesh {
 
       let avg_edge_len = total_edge_len / (num_edges as f32);
 
+      dbg!(total_edge_len);
+      dbg!(avg_edge_len);
+
       let mut to_split = Vec::new();
       let mut to_collapse = Vec::new();
-      let mut edge_op = mesh.initial_edge();
-
-      while let Some(edge_idx) = edge_op {
-        let edge_len = get_edge_len(mesh, edge_idx);
-
-        if edge_len > (4.0 / 3.0) * avg_edge_len {
-          to_split.push(edge_idx);
-        } else if edge_len < (4.0 / 5.0) * avg_edge_len {
-          to_collapse.push(edge_idx);
-        }
-
-        edge_op = mesh.next_edge(edge_idx);
-      }
 
       let midpoint = |mesh: &D, edge_idx| {
         let [l, r] = mesh.get_endpoints(edge_idx);
@@ -58,31 +61,54 @@ impl Operation for Remesh {
         (mesh.get_position(l) + mesh.get_position(r)) * 0.5
       };
 
-      for edge_idx in to_split {
-        let avg_pos = midpoint(mesh, edge_idx);
-        let (new_vertex, _) = mesh.split_edge(edge_idx);
-        mesh.set_position(new_vertex, &avg_pos);
+      let mut edge_op = mesh.initial_edge();
+
+      while let Some(edge_idx) = edge_op {
+        let edge_len = get_edge_len(mesh, edge_idx);
+
+        if edge_len > (4.0 / 3.0) * avg_edge_len {
+          to_split.push((edge_idx, midpoint(mesh, edge_idx)));
+        } else if edge_len < (4.0 / 5.0) * avg_edge_len {
+          to_collapse.push((edge_idx, midpoint(mesh, edge_idx)));
+        }
+
+        edge_op = mesh.next_edge(edge_idx);
       }
 
-      // let mut removed = HashSet::new();
-      // let mut store_removed = Vec::new();
-      // let mut store_modified = Vec::new();
+      dbg!(to_collapse.len());
+      dbg!(to_split.len());
+      dbg!(num_edges);
 
-      // for edge_idx in to_collapse {
-      //   if !removed.contains(&edge_idx) {
-      //     let avg_pos = midpoint(mesh, edge_idx);
+      for (edge_idx, new_pos) in to_split {
+        let (new_vertex, _) = mesh.split_edge(edge_idx);
+        // debug_assert!(!new_pos.x()
 
-      //     if let Some(vertex_idx) = mesh.collapse_edge(
-      //       edge_idx,
-      //       &mut store_modified,
-      //       &mut store_removed,
-      //     ) {
-      //       mesh.set_position(vertex_idx, &avg_pos);
-      //     }
+        debug_assert!(!new_pos[0].is_nan());
+        debug_assert!(!new_pos[1].is_nan());
+        debug_assert!(!new_pos[2].is_nan());
+        mesh.set_position(new_vertex, &new_pos);
+      }
 
-      //     removed.extend(store_removed.iter().cloned());
-      //   }
-      // }
+      if !self.no_collapse {
+        let mut removed = HashSet::new();
+        let mut store_removed = Vec::new();
+        let mut store_modified = Vec::new();
+
+        for (edge_idx, new_pos) in to_collapse {
+          if !removed.contains(&edge_idx) {
+            if let Some(vertex_idx) = mesh.collapse_edge(
+              edge_idx,
+              &mut store_modified,
+              &mut store_removed,
+            ) {
+              mesh.set_position(vertex_idx, &new_pos);
+            }
+
+            removed.extend(store_removed.iter().cloned());
+            removed.extend(store_modified.iter().map(|x| x.0));
+          }
+        }
+      }
 
       let mut edge_op = mesh.initial_edge();
 
@@ -134,8 +160,14 @@ impl Operation for Remesh {
 
         let delta = diff - (normal.dot(&diff)) * normal;
 
-        new_positions
-          .push((vertex_idx, orig_position + self.smoothing_weight * delta));
+        let new_position =
+          if delta[0].is_nan() || delta[1].is_nan() || delta[2].is_nan() {
+            orig_position
+          } else {
+            orig_position + self.smoothing_weight * delta
+          };
+
+        new_positions.push((vertex_idx, new_position));
 
         vertex_op = mesh.next_vertex(vertex_idx);
       }

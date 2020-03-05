@@ -970,7 +970,6 @@ impl DataStructure for HalfEdge {
         }
       }
 
-      // TODO: why?
       if num_common > 2 {
         return None;
       }

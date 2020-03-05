@@ -81,8 +81,6 @@ pub trait DataStructure: Sized {
   // new edge top, new edge bottom (same order as get_opposite_points)
   fn split_edge(&mut self, key: IndexType) -> (IndexType, [IndexType; 4]);
 
-  // TODO:
-  // new vertex, new vertex for modified 0, new vertex for modified 1
   fn collapse_edge(
     &mut self,
     key: IndexType,
