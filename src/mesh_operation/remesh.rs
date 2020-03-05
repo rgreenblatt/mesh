@@ -68,7 +68,6 @@ impl Operation for Remesh {
 
       for (edge_idx, new_pos) in to_split {
         let (new_vertex, _) = mesh.split_edge(edge_idx);
-        // debug_assert!(!new_pos.x()
 
         debug_assert!(!new_pos[0].is_nan());
         debug_assert!(!new_pos[1].is_nan());
