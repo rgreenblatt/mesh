@@ -75,6 +75,7 @@ pub trait DataStructure: Sized {
 
   fn flip_edge(&mut self, key: IndexType) -> Option<()>;
 
+  // new vertex,
   // order of returned edges:
   // original edge left, original edge right
   // new edge top, new edge bottom (same order as get_opposite_points)

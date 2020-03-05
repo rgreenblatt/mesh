@@ -1148,12 +1148,7 @@ impl DataStructure for HalfEdge {
   }
 
   fn degree(&self, vertex_idx: IndexType) -> usize {
-    // SPEED: fix unneeded memory allocation
-    let mut neighbors = Vec::new();
-
-    self.get_vertex_neighbors(vertex_idx, &mut neighbors);
-
-    neighbors.len()
+    self.vertex_half_edges(vertex_idx).1.count()
   }
 
   fn get_vertex_neighbors_append(
