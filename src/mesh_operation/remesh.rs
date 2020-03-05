@@ -26,12 +26,6 @@ impl Operation for Remesh {
 
         let val = (mesh.get_position(l) - mesh.get_position(r)).norm();
 
-        if val.is_nan() {
-          dbg!(val);
-          dbg!(mesh.get_position(l));
-          dbg!(mesh.get_position(r));
-        }
-
         debug_assert!(!val.is_nan());
 
         val
@@ -48,9 +42,6 @@ impl Operation for Remesh {
       }
 
       let avg_edge_len = total_edge_len / (num_edges as f32);
-
-      dbg!(total_edge_len);
-      dbg!(avg_edge_len);
 
       let mut to_split = Vec::new();
       let mut to_collapse = Vec::new();
@@ -74,10 +65,6 @@ impl Operation for Remesh {
 
         edge_op = mesh.next_edge(edge_idx);
       }
-
-      dbg!(to_collapse.len());
-      dbg!(to_split.len());
-      dbg!(num_edges);
 
       for (edge_idx, new_pos) in to_split {
         let (new_vertex, _) = mesh.split_edge(edge_idx);
