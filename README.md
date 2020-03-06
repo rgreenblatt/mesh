@@ -36,6 +36,7 @@ insert and $O(1)$ look up.
 
 
 ## Features
+
   - subdivide
     - $O(n)$
     - I think my implementation is pretty fast because of data structure
@@ -69,14 +70,20 @@ insert and $O(1)$ look up.
       and/or --no-flip
 
 ## Results 
-All results are in the `results/` directory.
 
-input                     output               command         args
------------------------   -------------------  -------------   --------------
-meshes/cow.obj            subdiv_cow.obj       subdivide       2
-subdiv_cow.obj            simp_subdiv_cow.obj  simplify        87060
-meshes/cow.obj            simp_cow.obj         simplify        5000
-meshes/bunny.obj          simp_bunny.obj       simplify        15000
-meshes/bunny.obj          noise_bunny.obj      noise           0.01
-noise_bunny.obj           denoise_bunny.obj    denoise         5 0.02 0.02 2
-meshes/peter.obj          remesh_peter.obj     remesh          10 0.5
+All results are in the `results/` directory. Each result has its own
+subdirectory.  The name of the directory corresponds to the output name (but
+without obj).  Images are also included of the input and output in each result
+directory.  An image of the original mesh is also included when the operation
+is the second operation applied (for instance, simp_subdiv_cow also has a
+picture of the original cow).
+
+input              output               command         args
+----------------   -------------------  -------------   --------------
+cow.obj            subdiv_cow.obj       subdivide       2
+subdiv_cow.obj     simp_subdiv_cow.obj  simplify        87060
+cow.obj            simp_cow.obj         simplify        5000
+bunny.obj          simp_bunny.obj       simplify        15000
+bunny.obj          noise_bunny.obj      noise           0.01
+noise_bunny.obj    denoise_bunny.obj    denoise         5 0.02 0.02 2
+peter.obj          remesh_peter.obj     remesh          10 0.5
