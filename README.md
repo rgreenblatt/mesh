@@ -6,7 +6,7 @@ This project is implemented in Rust. I wasn't able to find a working rust
 install anywhere in the department file system (in theory,
 /course/cs1680/contrib/ should have one, but the permissions are wrong).
 A docker container which can run the project can be found
-[here](https://hub.docker.com/r/greenblattryan/mesh)
+[here](https://hub.docker.com/r/greenblattryan/mesh).
 I have also included a binary in the `bin/` directory. This binary runs
 on the department machines and will probably run on any reasonably recent
 version of linux.
