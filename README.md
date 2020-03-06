@@ -78,5 +78,5 @@ subdiv_cow.obj            simp_subdiv_cow.obj  simplify        87060
 meshes/cow.obj            simp_cow.obj         simplify        5000
 meshes/bunny.obj          simp_bunny.obj       simplify        15000
 meshes/bunny.obj          noise_bunny.obj      noise           0.01
-meshes/noise_bunny.obj    denoise_bunny.obj    denoise         5 0.02 0.02 2
+noise_bunny.obj           denoise_bunny.obj    denoise         5 0.02 0.02 2
 meshes/peter.obj          remesh_peter.obj     remesh          10 0.5
