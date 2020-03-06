@@ -7,7 +7,9 @@ install anywhere in the department file system (in theory,
 /course/cs1680/contrib/ should have one, but the permissions are wrong).
 A docker container which can run the project can be found
 [here](https://hub.docker.com/r/greenblattryan/mesh)
-I have also included a binary in the `bin/` directory.
+I have also included a binary in the `bin/` directory. This binary runs
+on the department machines and will probably run on any reasonably recent
+version of linux.
 
 If extra arguments are supplied for a command, that will lead to an error.
 For instance, `./mesh inp.obj out.obj subdivide 1 0.38838 3 4` would error
