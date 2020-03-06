@@ -2,9 +2,12 @@
 
 ## Notes
 
-This project is implemented in Rust. It can be compiled on department machines.
-To build, run `cargo build --release` which will place the `mesh` binary under
-`target/release/mesh`. I have also included a binary in the `bin/` directory.
+This project is implemented in Rust. I wasn't able to find a working rust
+install anywhere in the department file system (in theory,
+/course/cs1680/contrib/ should have one, but the permissions are wrong).
+A docker container which can run the project can be found
+[here](https://hub.docker.com/r/greenblattryan/mesh)
+I have also included a binary in the `bin/` directory.
 
 If extra arguments are supplied for a command, that will lead to an error.
 For instance, `./mesh inp.obj out.obj subdivide 1 0.38838 3 4` would error
