@@ -201,7 +201,6 @@ impl HalfEdge {
         half_edge: self,
       },
     )
-    // TODO
   }
 
   fn combine_twins(

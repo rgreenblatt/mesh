@@ -12,6 +12,8 @@ pub struct Remesh {
   smoothing_weight: f32,
   #[clap(long = "no-collapse")]
   no_collapse: bool,
+  #[clap(long = "no-flip")]
+  no_flip: bool,
 }
 
 impl Operation for Remesh {
@@ -96,30 +98,33 @@ impl Operation for Remesh {
         }
       }
 
-      let mut edge_op = mesh.initial_edge();
+      if !self.no_flip {
+        let mut edge_op = mesh.initial_edge();
 
-      while let Some(edge_idx) = edge_op {
-        if let ([l, r, top], Some(bottom)) = mesh.get_edge_neighbors(edge_idx) {
-          let l_degree = mesh.degree(l) as i32;
-          let r_degree = mesh.degree(r) as i32;
-          let top_degree = mesh.degree(top) as i32;
-          let bottom_degree = mesh.degree(bottom) as i32;
+        while let Some(edge_idx) = edge_op {
+          if let ([l, r, top], Some(bottom)) = mesh.get_edge_neighbors(edge_idx)
+          {
+            let l_degree = mesh.degree(l) as i32;
+            let r_degree = mesh.degree(r) as i32;
+            let top_degree = mesh.degree(top) as i32;
+            let bottom_degree = mesh.degree(bottom) as i32;
 
-          let flip_dev = (l_degree - 7).abs()
-            + (r_degree - 7).abs()
-            + (top_degree - 5).abs()
-            + (bottom_degree - 5).abs();
-          let no_flip_dev = (l_degree - 6).abs()
-            + (r_degree - 6).abs()
-            + (top_degree - 6).abs()
-            + (bottom_degree - 6).abs();
+            let flip_dev = (l_degree - 7).abs()
+              + (r_degree - 7).abs()
+              + (top_degree - 5).abs()
+              + (bottom_degree - 5).abs();
+            let no_flip_dev = (l_degree - 6).abs()
+              + (r_degree - 6).abs()
+              + (top_degree - 6).abs()
+              + (bottom_degree - 6).abs();
 
-          if flip_dev < no_flip_dev && l_degree > 3 && r_degree > 3 {
-            mesh.flip_edge(edge_idx);
+            if flip_dev < no_flip_dev && l_degree > 3 && r_degree > 3 {
+              mesh.flip_edge(edge_idx);
+            }
           }
-        }
 
-        edge_op = mesh.next_edge(edge_idx);
+          edge_op = mesh.next_edge(edge_idx);
+        }
       }
 
       let mut vertex_op = mesh.initial_vertex();

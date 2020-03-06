@@ -40,7 +40,6 @@ impl Operation for Denoise {
         neighborhood.insert(vertex_idx);
         new_vertices.insert(vertex_idx);
 
-        // TODO: is this correct kernel size
         for _ in 0..self.kernel_size {
           store.clear();
 
@@ -77,10 +76,6 @@ impl Operation for Denoise {
             (sum + w * height, normalizer + w)
           },
         );
-
-        // dbg!(sum);
-        // dbg!(normalizer);
-        // dbg!(normal);
 
         new_positions[vertex_idx as usize] =
           Some(vertex_pos - normal * (sum / normalizer));
